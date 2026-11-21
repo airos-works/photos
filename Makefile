@@ -86,6 +86,13 @@ $(BUILD)/photos_tool: $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 	$(CXX) $(APP_LDFLAGS) -o $@ $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) \
 		$(NET_OBJ) $(RAW_LINK) $(LIBS)
 
+# facescan: the face engine from a shell (tools/face-test, docs/FACES.md).
+FACESCAN_OBJ = $(BUILD)/tools/face-test/facescan.o \
+	$(BUILD)/src/platform/FaceEngine.o $(BUILD)/src/core/FaceMath.o
+$(BUILD)/facescan: $(FACESCAN_OBJ)
+	$(CXX) $(APP_LDFLAGS) -o $@ $(FACESCAN_OBJ) -lbe -ltranslation -lneural
+-include $(BUILD)/tools/face-test/facescan.d
+
 HAIKU_DIRS = src/ui src/platform src/agent src/tool
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp

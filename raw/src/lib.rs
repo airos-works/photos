@@ -135,8 +135,55 @@ fn init_pool() {
         let env = || std::env::var("PHOTOS_RAW_THREADS").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|&n| n > 0);
         let n = if asked > 0 { asked } else { env().unwrap_or_else(default_threads) };
         // (an error means something else in the program started rayon's pool: its size stands)
-        let _ = rayon::ThreadPoolBuilder::new().num_threads(n.clamp(1, 256)).thread_name(|i| format!("photos raw {i}")).build_global();
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(n.clamp(1, 256))
+            .stack_size(POOL_STACK)
+            .thread_name(|i| format!("photos raw {i}"))
+            .build_global();
     });
+}
+
+/// Stack of a pool thread: twice what LightCraft's own threads have.
+const POOL_STACK: usize = 4 * 1024 * 1024;
+
+/// Runs `work` on a thread of the pool and waits for it. The caller's thread only waits: how
+/// small its stack is (256 KiB for a thread a Haiku program spawns) does not matter to the
+/// decoders, and the pool's many short parallel loops start from one of its own threads.
+fn on_pool<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+    init_pool();
+    rayon::scope(|_| work())
+}
+
+/// Size, orientation and EXIF facts of a RAW file, from its headers.
+pub fn info(bytes: &[u8]) -> Result<Info> {
+    on_pool(|| info_now(bytes))
+}
+
+/// The embedded preview of a RAW file as a JPEG: the largest, or with `min_edge > 0` the smallest
+/// whose long edge is at least that.
+pub fn preview_jpeg(bytes: &[u8], min_edge: u32) -> Result<PreviewJpeg> {
+    on_pool(|| preview_jpeg_now(bytes, min_edge))
+}
+
+/// The embedded preview decoded: upright sRGB, the long edge at most `max_edge` (0: as stored).
+pub fn preview_image(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
+    on_pool(|| preview_image_now(bytes, max_edge))
+}
+
+/// Develops a RAW file as LightCraft shows it unedited: upright sRGB, the long edge at most
+/// `max_edge` (0: full size). Takes the file's bytes: they are freed before the picture is rendered.
+pub fn develop(bytes: Vec<u8>, max_edge: u32) -> Result<Rgba8> {
+    on_pool(move || develop_now(bytes, max_edge))
+}
+
+/// Size and EXIF facts of a HEIF file.
+pub fn heif_info(bytes: &[u8]) -> Result<Info> {
+    on_pool(|| heif_info_now(bytes))
+}
+
+/// A HEIF picture, upright sRGB, the long edge at most `max_edge` (0: full size).
+pub fn heif_decode(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
+    on_pool(|| heif_decode_now(bytes, max_edge))
 }
 
 fn read(path: &std::path::Path) -> Result<Vec<u8>> {
@@ -207,8 +254,7 @@ fn raw_error(e: lightcraft_raw::RawError) -> Error {
 }
 
 /// Size, orientation and EXIF facts of a RAW file, from its headers.
-pub fn info(bytes: &[u8]) -> Result<Info> {
-    init_pool();
+fn info_now(bytes: &[u8]) -> Result<Info> {
     if !is_raw(bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
@@ -263,8 +309,7 @@ fn encode_jpeg(img: &Rgba8) -> Result<Vec<u8>> {
 
 /// The embedded preview of a RAW file as a JPEG: the largest, or with `min_edge > 0` the smallest
 /// whose long edge is at least that.
-pub fn preview_jpeg(bytes: &[u8], min_edge: u32) -> Result<PreviewJpeg> {
-    init_pool();
+fn preview_jpeg_now(bytes: &[u8], min_edge: u32) -> Result<PreviewJpeg> {
     if !is_raw(bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
@@ -285,11 +330,10 @@ fn edge(max_edge: u32) -> usize {
 }
 
 /// The embedded preview decoded: upright sRGB, the long edge at most `max_edge` (0: as stored).
-pub fn preview_image(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
+fn preview_image_now(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
     if !is_raw(bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
-    init_pool();
     match files::embedded_preview_srgb(bytes, edge(max_edge)) {
         Some(img) if img.width > 0 && img.height > 0 => Ok(img),
         _ if lightcraft_raw::embedded_preview(bytes).is_none() => Err(Error::NoPreview("the file has no embedded preview".into())),
@@ -317,11 +361,10 @@ pub fn default_settings(info: &SourceInfo) -> DevelopSettings {
 
 /// Develops a RAW file as LightCraft shows it unedited: upright sRGB, the long edge at most
 /// `max_edge` (0: full size). Takes the file's bytes: they are freed before the picture is rendered.
-pub fn develop(bytes: Vec<u8>, max_edge: u32) -> Result<Rgba8> {
+fn develop_now(bytes: Vec<u8>, max_edge: u32) -> Result<Rgba8> {
     if !is_raw(&bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
-    init_pool();
     // Headers first: they say how large the original is (noise reduction and sharpening size
     // their radii in the original's pixels) and catch what the decoder cannot read before
     // LightCraft's loader falls back to the embedded JPEG, which is not a development.
@@ -391,8 +434,7 @@ fn codec_error(e: lightcraft_codecs::Error) -> Error {
 }
 
 /// Size and EXIF facts of a HEIF file.
-pub fn heif_info(bytes: &[u8]) -> Result<Info> {
-    init_pool();
+fn heif_info_now(bytes: &[u8]) -> Result<Info> {
     heif_checked(bytes)?;
     let header = lightcraft_codecs::read_header(bytes).map_err(codec_error)?;
     let o = Orientation::from_exif(header.orientation);
@@ -401,9 +443,8 @@ pub fn heif_info(bytes: &[u8]) -> Result<Info> {
 }
 
 /// A HEIF picture, upright sRGB, the long edge at most `max_edge` (0: full size).
-pub fn heif_decode(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
+fn heif_decode_now(bytes: &[u8], max_edge: u32) -> Result<Rgba8> {
     heif_checked(bytes)?;
-    init_pool();
     let opts = if max_edge == 0 { lightcraft_codecs::DecodeOptions::default() } else { lightcraft_codecs::DecodeOptions::fit(max_edge, max_edge) };
     let d = lightcraft_codecs::decode(bytes, opts).map_err(codec_error)?;
     let o = Orientation::from_exif(d.orientation);

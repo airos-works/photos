@@ -32,6 +32,12 @@ negative codes plus a message; a damaged file never takes the program down
 `PHOTOS_RAW_INTERNAL`). Pictures come back as BGRA with alpha 255, sRGB,
 already upright; they are freed with `photos_raw_free_image`.
 
+The work runs on the library's own thread pool
+(`photos_raw_set_threads(n)` before the first call, or `PHOTOS_RAW_THREADS`;
+by default three quarters of the CPUs, at most 16). The calling thread only
+waits, so it may be any thread, whatever its stack: a window's, a
+`spawn_thread` worker with Haiku's 256 KiB. A call cannot be cancelled.
+
 ## What "LightCraft's default rendering" is
 
 `photos_raw_develop_file` returns the picture LightCraft shows for a file
@@ -256,6 +262,14 @@ camera's JPEG and a development) for looking at.
 - No edits: the interface renders LightCraft's defaults. Photos' own edits
   work on the developed picture.
 - The whole file is read into memory (RAW files are tens of megabytes).
+- Running out of memory ends the program (Rust's allocation failure is not
+  an error that comes back): do not develop several large files at full
+  size at once on a small machine.
+- A file cut short still has its header: `photos_raw_info_file` then
+  answers with the embedded preview's size, as it does for a variant the
+  decoder cannot read, and the development fails with `PHOTOS_RAW_DAMAGED`.
+- arm64: the library and `rawtest` build and link for `aarch64-unknown-haiku`
+  (2026-11-21); nothing has run on an arm64 machine yet.
 - Licences: LightCraft is MIT OR Apache-2.0; `raw/NOTICE` lists every crate
   the library is built from. All are permissive (MIT, Apache-2.0, BSD, ISC,
   Zlib and the like).

@@ -99,19 +99,9 @@ RotatePhoto(Library& library, Pictures& pictures, int64_t photoId,
 	EditTarget target;
 	GetEditTarget(library, photo, target);
 	EditParams params = target.params;
-	int turns = ((quarterTurns % 4) + 4) % 4;
-	if (turns == 0)
+	if (quarterTurns % 4 == 0)
 		return true;
-	// The crop frame turns with the picture.
-	for (int i = 0; i < turns; i++) {
-		float x = params.cropX, y = params.cropY, w = params.cropW, h = params.cropH;
-		params.cropX = 1 - y - h;
-		params.cropY = x;
-		params.cropW = h;
-		params.cropH = w;
-	}
-	// A mirrored picture turns the other way round underneath.
-	params.rotation = (params.rotation + (params.flip ? 4 - turns : turns)) % 4;
+	TurnEdit(params, quarterTurns);
 	return SaveEdit(library, pictures, photoId, params, error);
 }
 

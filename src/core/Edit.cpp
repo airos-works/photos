@@ -147,6 +147,32 @@ EditParams::FromJson(const std::string& text, EditParams& params)
 
 
 void
+TurnEdit(EditParams& params, int quarterTurns)
+{
+	int turns = ((quarterTurns % 4) + 4) % 4;
+	for (int i = 0; i < turns; i++) {
+		float x = params.cropX, y = params.cropY, w = params.cropW, h = params.cropH;
+		params.cropX = 1 - y - h;
+		params.cropY = x;
+		params.cropW = h;
+		params.cropH = w;
+	}
+	// The mirror is applied after the quarter turns: turning the mirrored
+	// picture clockwise turns what is underneath the other way.
+	params.rotation = (((params.rotation + (params.flip ? -turns : turns)) % 4) + 4) % 4;
+}
+
+
+void
+FlipEdit(EditParams& params)
+{
+	params.flip = !params.flip;
+	params.cropX = 1 - params.cropX - params.cropW;
+	params.straighten = -params.straighten;
+}
+
+
+void
 ClampCrop(EditParams& params)
 {
 	auto finite = [](float value, float fallback) {

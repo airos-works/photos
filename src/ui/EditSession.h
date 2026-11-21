@@ -34,6 +34,11 @@ public:
 	// New values: a rendering follows as kMsgEditRendered ("bitmap",
 	// "width", "height": the size of the full edited picture).
 	void SetParams(const photos::EditParams& params);
+	// The same without a rendering (the crop frame moved: the viewer draws
+	// it).
+	void SetParamsQuietly(const photos::EditParams& params);
+	// The preview is loaded (kMsgEditSourceReady came): render it.
+	void SourceReady();
 	void SetCropMode(bool cropMode);
 	bool CropMode() const { return fCropMode; }
 	// Suitable light and colour values for the picture.

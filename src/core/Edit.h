@@ -57,6 +57,11 @@ void ApplyAdjustments(Image& image, const EditParams& params);
 // "Enhance": light and colour values that suit the picture (geometry kept).
 EditParams AutoEnhance(const Image& image, const EditParams& current);
 
+// Turns the edited picture by quarter turns (positive: clockwise), and
+// mirrors it left to right: the crop frame and the straightening go along.
+void TurnEdit(EditParams& params, int quarterTurns);
+void FlipEdit(EditParams& params);
+
 // Keeps a crop rectangle inside the picture and at least a few pixels large.
 void ClampCrop(EditParams& params);
 

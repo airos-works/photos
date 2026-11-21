@@ -207,47 +207,43 @@ DecodeRaw(const std::string& path, Image& image, int maxEdge, uint32 flags,
 #ifdef PHOTOS_HAVE_RAW
 	char message[256] = "";
 	if ((flags & kDecodeRawPreview) != 0) {
-		uint8_t* jpeg = nullptr;
-		size_t jpegSize = 0;
-		if (photos_raw_preview_file(path.c_str(), &jpeg, &jpegSize, message,
-				sizeof(message)) == 0 && jpeg != nullptr) {
+		// The camera's own JPEG inside the file: no sensor data is touched.
+		// It is asked for somewhat larger than wanted (its size is an upper
+		// bound) and fitted afterwards.
+		photos_raw_image preview;
+		memset(&preview, 0, sizeof(preview));
+		uint32_t edge = maxEdge > 0 ? (uint32_t)maxEdge * 2 : 0;
+		if (photos_raw_preview_image_file(path.c_str(), edge, &preview, message,
+				sizeof(message)) == PHOTOS_RAW_OK && preview.pixels != nullptr) {
 			// A preview much smaller than asked for is of no use.
-			Metadata preview;
-			bool usable = ParseJpegMetadata(jpeg, jpegSize, preview)
-				&& (maxEdge <= 0 ? std::max(preview.width, preview.height) >= 1600
-					: std::max(preview.width, preview.height) * 3 >= maxEdge * 2);
-			status_t status = usable ? DecodeJpeg(jpeg, jpegSize, image, maxEdge)
-				: B_ERROR;
-			// Previews without an orientation of their own lie as the
-			// sensor does.
-			if (status == B_OK && preview.orientation <= 1) {
-				photos_raw_info info;
-				memset(&info, 0, sizeof(info));
-				if (photos_raw_info_file(path.c_str(), &info, message,
-						sizeof(message)) == 0 && info.orientation > 1) {
-					bool previewPortrait = image.height > image.width;
-					bool developedPortrait = info.height > info.width;
-					if (previewPortrait != developedPortrait
-						|| info.orientation == 3) {
-						Image turned;
-						OrientImage(image, info.orientation, turned);
-						image = std::move(turned);
-					}
-				}
-			}
-			photos_raw_free(jpeg, jpegSize);
-			if (status == B_OK)
+			int longer = (int)std::max(preview.width, preview.height);
+			bool usable = maxEdge <= 0 ? longer >= 1400 : longer * 3 >= maxEdge * 2;
+			if (usable) {
+				TakeRawImage(preview, image);
 				return B_OK;
+			}
+			photos_raw_free_image(&preview);
 		}
 	}
 	photos_raw_image raw;
 	memset(&raw, 0, sizeof(raw));
-	int result = photos_raw_develop_file(path.c_str(),
-		maxEdge > 0 ? (uint32_t)maxEdge : 0, &raw, message, sizeof(message));
-	if (result != 0 || raw.pixels == nullptr) {
+	// A reduced development may come out a quarter below the bound.
+	uint32_t edge = maxEdge > 0 ? (uint32_t)maxEdge * 4 / 3 + 8 : 0;
+	int result = photos_raw_develop_file(path.c_str(), edge, &raw, message,
+		sizeof(message));
+	if (result != PHOTOS_RAW_OK || raw.pixels == nullptr) {
 		if (error != nullptr)
 			*error = message[0] != '\0' ? message : "cannot develop this RAW file";
-		// The system's RAW translator knows other cameras.
+		// A camera the engine does not know: its preview, whatever its
+		// size, then the system's RAW translator.
+		photos_raw_image preview;
+		memset(&preview, 0, sizeof(preview));
+		if (photos_raw_preview_image_file(path.c_str(),
+				maxEdge > 0 ? (uint32_t)maxEdge * 2 : 0, &preview, message,
+				sizeof(message)) == PHOTOS_RAW_OK && preview.pixels != nullptr) {
+			TakeRawImage(preview, image);
+			return B_OK;
+		}
 		BFile file(path.c_str(), B_READ_ONLY);
 		if (file.InitCheck() == B_OK && DecodeWithTranslator(file, image) == B_OK)
 			return B_OK;
@@ -326,12 +322,13 @@ DecodeFile(const std::string& path, Image& image, int maxEdge, uint32 flags,
 			Finish(image, maxEdge, flags);
 		return status;
 	}
-#ifdef PHOTOS_HAVE_HEIF
-	if (kind == kKindHeic) {
+#ifdef PHOTOS_HAVE_RAW
+	if (kind == kKindHeic && photos_heif_available()) {
 		char message[256] = "";
 		photos_raw_image raw;
 		memset(&raw, 0, sizeof(raw));
-		if (photos_heif_decode_file(path.c_str(), maxEdge > 0 ? (uint32_t)maxEdge : 0,
+		if (photos_heif_decode_file(path.c_str(),
+				maxEdge > 0 ? (uint32_t)maxEdge * 4 / 3 + 8 : 0,
 				&raw, message, sizeof(message)) == 0 && raw.pixels != nullptr) {
 			TakeRawImage(raw, image);
 			Finish(image, maxEdge, flags);
@@ -385,8 +382,8 @@ ReadFileMetadata(const std::string& path, MediaKind kind, Metadata& metadata)
 		}
 	}
 #endif
-#ifdef PHOTOS_HAVE_HEIF
-	if (kind == kKindHeic) {
+#ifdef PHOTOS_HAVE_RAW
+	if (kind == kKindHeic && photos_heif_available()) {
 		photos_raw_info info;
 		memset(&info, 0, sizeof(info));
 		char message[256] = "";
@@ -402,7 +399,8 @@ ReadFileMetadata(const std::string& path, MediaKind kind, Metadata& metadata)
 			metadata.exposureTime = info.exposure_time;
 			metadata.fNumber = info.f_number;
 			metadata.focalLength = info.focal_length;
-			if (info.has_gps) {
+			if (info.has_gps && std::isfinite(info.latitude)
+				&& std::isfinite(info.longitude)) {
 				metadata.hasGps = true;
 				metadata.latitude = info.latitude;
 				metadata.longitude = info.longitude;

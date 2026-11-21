@@ -105,6 +105,22 @@ EditSession::SetParams(const EditParams& params)
 
 
 void
+EditSession::SetParamsQuietly(const EditParams& params)
+{
+	fParams = params;
+	ClampCrop(fParams);
+}
+
+
+void
+EditSession::SourceReady()
+{
+	fReady = true;
+	_Request();
+}
+
+
+void
 EditSession::SetCropMode(bool cropMode)
 {
 	fCropMode = cropMode;

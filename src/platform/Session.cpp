@@ -28,6 +28,8 @@ Session::Session()
 	fFaces(nullptr),
 	fBridge(nullptr),
 	fChangePending(false),
+	fChangeBits(0),
+	fChangePhoto(0),
 	fStarted(false),
 	fSyncCancel(false),
 	fSyncRequested(false),
@@ -111,14 +113,24 @@ Session::Start(const BMessenger& target, bool withFaces)
 			fFaces->Wake();
 		// One message until the window has caught up: a sync or an import
 		// makes thousands of changes.
-		bool expected = false;
-		if (!fChangePending.compare_exchange_strong(expected, true))
-			return;
-		BMessage message(kMsgLibraryChanged);
-		message.AddInt32("changes", (int32)changes);
-		message.AddInt64("id", photoId);
-		if (fTarget.SendMessage(&message) != B_OK)
+		bool send;
+		{
+			std::lock_guard<std::mutex> lock(fChangeLock);
+			fChangeBits |= changes;
+			if (photoId != 0) {
+				if (fChangePhoto == 0)
+					fChangePhoto = photoId;
+				else if (fChangePhoto != photoId)
+					fChangePhoto = -1;
+			} else if ((changes & kChangedList) != 0)
+				fChangePhoto = -1;
+			send = !fChangePending;
+			fChangePending = true;
+		}
+		if (send && fTarget.SendMessage(kMsgLibraryChanged) != B_OK) {
+			std::lock_guard<std::mutex> lock(fChangeLock);
 			fChangePending = false;
+		}
 	});
 	fPictures->SetTarget(target);
 	fImporter->SetTarget(target);
@@ -133,6 +145,19 @@ Session::Start(const BMessenger& target, bool withFaces)
 	ApplyDeviceSettings();
 	if (fSync.IsConfigured() && fSettings.GetBool(setting::kImmichEnabled, true))
 		SyncNow();
+}
+
+
+uint32_t
+Session::TakeLibraryChanges(int64_t& photoId)
+{
+	std::lock_guard<std::mutex> lock(fChangeLock);
+	uint32_t bits = fChangeBits;
+	photoId = fChangePhoto > 0 ? fChangePhoto : 0;
+	fChangeBits = 0;
+	fChangePhoto = 0;
+	fChangePending = false;
+	return bits;
 }
 
 

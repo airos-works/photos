@@ -56,9 +56,10 @@ public:
 	PhotoCraftBridge& Editors() { return *fBridge; }
 	SyncEngine& Sync() { return fSync; }
 
-	// The library's change message was handled: the next change sends one
-	// again.
-	void LibraryChangeSeen() { fChangePending = false; }
+	// What changed in the library since the last call (LibraryChange bits);
+	// photoId is the one photo concerned, 0 when several were. A
+	// kMsgLibraryChanged is sent when there is something to take.
+	uint32_t TakeLibraryChanges(int64_t& photoId);
 
 	// --- Immich ---
 	// Signs in (blocking) and keeps the session in the settings.
@@ -104,7 +105,10 @@ private:
 	PhotoCraftBridge* fBridge;
 	BMessenger fTarget;
 	std::string fSettingsDirectory;
-	std::atomic<bool> fChangePending;
+	std::mutex fChangeLock;
+	bool fChangePending;
+	uint32_t fChangeBits;
+	int64_t fChangePhoto;		// 0: none yet, -1: several
 	bool fStarted;
 
 	std::mutex fSyncLock;

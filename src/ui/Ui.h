@@ -80,7 +80,9 @@ enum {
 	kMsgOpenCamera = 'opCm',		// "key"
 	kMsgCameraListed = 'cmLs',
 	kMsgCameraThumb = 'cmTh',
-	kMsgCameraImport = 'cmIm',		// "what": 0 new, 1 selected, 2 all
+	kMsgCameraImportNew = 'cmIn',
+	kMsgCameraImportSelected = 'cmIs',
+	kMsgCameraImportAll = 'cmIa',
 	// Tests and scripting: "hey Photos 'tstQ'" answers with the state.
 	kMsgTestQuery = 'tstQ'
 };

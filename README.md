@@ -11,6 +11,19 @@ by [LightCraft](https://github.com/airos-works/lightcraft)'s engine; bigger
 edits go to [PhotoCraft](https://github.com/airos-works/photocraft) and come
 back as versions.
 
+<!-- airos-ci:latest-builds:start -->
+## Latest builds
+
+Built automatically by air/OS CI from commit `eddc49d` on 2026-11-21 ([all files](https://github.com/airos-works/photos/releases/tag/latest)).
+
+| Architecture | Package |
+|---|---|
+| arm64 | [photos-1.0.0-2-arm64.hpkg](https://github.com/airos-works/photos/releases/download/latest/photos-1.0.0-2-arm64.hpkg) |
+| x86_64 | [photos-1.0.0-2-x86_64.hpkg](https://github.com/airos-works/photos/releases/download/latest/photos-1.0.0-2-x86_64.hpkg) |
+
+Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2821-g02fa9ead2d, arm64 hrev60207-2821-g02fa9ead2d.
+<!-- airos-ci:latest-builds:end -->
+
 ## What it does
 
 - **Your photos by time.** *Photos* is the timeline, newest first, as **Years**,

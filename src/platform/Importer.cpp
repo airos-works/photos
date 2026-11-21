@@ -5,6 +5,8 @@
 #include <Message.h>
 #include <OS.h>
 
+#include <cstring>
+
 #include <sys/stat.h>
 
 namespace photos {
@@ -231,6 +233,20 @@ Importer::_RunCamera(Job& job)
 	}
 	std::string incoming = JoinPath(fLibrary.Directory(), "originals/.incoming");
 	MakeDirs(incoming);
+	// The source is closed between uses (a camera shows "connected to a
+	// computer" while a session is open).
+	std::string openError;
+	status_t opened = job.camera->Open(&openError);
+	if (opened != B_OK) {
+		std::lock_guard<std::mutex> lock(fLock);
+		fStatus.done += (int)job.items.size();
+		fStatus.failed += (int)job.items.size();
+		if (fStatus.error.empty()) {
+			fStatus.error = openError.empty() ? std::string(strerror(opened))
+				: openError;
+		}
+		return;
+	}
 	for (auto& item : job.items) {
 		if (_Cancelled())
 			break;
@@ -252,15 +268,23 @@ Importer::_RunCamera(Job& job)
 			RemoveFile(temporary);
 			if (_Cancelled())
 				break;
-			result.error = strerror(status);
+			result.error = job.camera->LastError();
+			if (result.error.empty())
+				result.error = strerror(status);
 			_Count(result, item.name);
+			// Unplugged: the rest cannot work either.
+			if (status == B_DEV_NOT_READY)
+				break;
 			continue;
 		}
 		ImportOptions options;
 		options.importId = importId;
 		options.move = true;
 		options.name = item.name;
-		options.takenFallback = item.taken;
+		// The device's time is a point in time; the library keeps the
+		// wall clock's reading.
+		options.takenFallback = item.taken != 0
+			? item.taken + LocalOffsetSeconds(item.taken) : 0;
 		options.itemKey = CameraItemKey(item.name, item.size, item.taken);
 		result = fLibrary.ImportFile(temporary, options);
 		RemoveFile(temporary);
@@ -268,6 +292,7 @@ Importer::_RunCamera(Job& job)
 		if (result.id != 0 && job.deleteAfterwards)
 			job.camera->DeleteItem(item);
 	}
+	job.camera->Close();
 #else
 	(void)job;
 #endif

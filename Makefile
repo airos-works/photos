@@ -75,8 +75,13 @@ $(BUILD)/Photos: $(UI_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 	$(MIMESET) -f $@.new
 	mv $@.new $@
 
-$(BUILD)/photos_agent: $(AGENT_OBJ) $(BUILD)/photos_agent.rsrc
-	$(CXX) $(APP_LDFLAGS) -o $@.new $(AGENT_OBJ) -lbe -ldevice
+# The camera layer by itself (PTP/MTP over USB, volumes with a DCIM folder):
+# all the agent and tools/ptp-test/ptpls need of the application.
+CAMERA_OBJ = $(BUILD)/src/platform/CameraSource.o \
+	$(BUILD)/src/platform/UsbPtpTransport.o $(BUILD)/src/ptp/Ptp.o
+
+$(BUILD)/photos_agent: $(AGENT_OBJ) $(CAMERA_OBJ) $(BUILD)/photos_agent.rsrc
+	$(CXX) $(APP_LDFLAGS) -o $@.new $(AGENT_OBJ) $(CAMERA_OBJ) -lbe -ldevice
 	$(XRES) -o $@.new $(BUILD)/photos_agent.rsrc
 	$(MIMESET) -f $@.new
 	mv $@.new $@
@@ -100,7 +105,18 @@ $(BUILD)/facescan: $(FACESCAN_OBJ)
 	$(CXX) $(APP_LDFLAGS) -o $@ $(FACESCAN_OBJ) -lbe -ltranslation -lneural
 -include $(BUILD)/tools/face-test/facescan.d
 
-HAIKU_DIRS = src/ui src/platform src/agent src/tool
+# ptpls: cameras from a shell, the test tool of the camera layer
+# (docs/DEVICES.md). Not part of "all": tools/build-cross.sh ARCH build-ARCH/ptpls
+$(BUILD)/ptpls: $(BUILD)/tools/ptp-test/ptpls.o $(CAMERA_OBJ)
+	$(CXX) $(APP_LDFLAGS) -o $@ $^ -lbe -ldevice
+
+# A stand-in for Photos (its signature, a log of the camera messages it
+# gets) for testing the agent by itself.
+$(BUILD)/fake_photos: $(BUILD)/tools/ptp-test/fake-photos.o $(BUILD)/Photos.rsrc
+	$(CXX) $(APP_LDFLAGS) -o $@ $(BUILD)/tools/ptp-test/fake-photos.o -lbe
+	$(XRES) -o $@ $(BUILD)/Photos.rsrc
+
+HAIKU_DIRS = src/ui src/platform src/agent src/tool tools/ptp-test
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp
 	mkdir -p $$(dir $$@)
@@ -145,4 +161,5 @@ clean:
 	rm -rf build-haiku build-host build-x86_64 build-arm64
 
 -include $(CORE_OBJ:.o=.d) $(NET_OBJ:.o=.d) $(PLATFORM_OBJ:.o=.d) \
-	$(UI_OBJ:.o=.d) $(AGENT_OBJ:.o=.d) $(TOOL_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
+	$(UI_OBJ:.o=.d) $(AGENT_OBJ:.o=.d) $(TOOL_OBJ:.o=.d) $(TEST_OBJ:.o=.d) \
+	$(wildcard $(BUILD)/tools/ptp-test/*.d)

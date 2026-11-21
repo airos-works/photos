@@ -1388,7 +1388,16 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case photos::kMsgCameraArrived:
-			CameraArrived(message->GetString("key", ""));
+			// A device that was there when Photos started is only listed;
+			// one that is plugged in now, or that the agent started Photos
+			// for, is shown.
+			if (message->GetBool("initial", false)
+				&& !message->GetBool("launch", false)) {
+#ifdef PHOTOS_HAVE_CAMERAS
+				_OpenCamera(nullptr);
+#endif
+			} else
+				CameraArrived(message->GetString("key", ""));
 			break;
 
 		case photos::kMsgCameraRemoved:

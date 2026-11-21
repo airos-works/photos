@@ -4,6 +4,10 @@
 
 #include <SupportDefs.h>
 
+// kMsgCameraArrived / kMsgCameraRemoved ('camA' / 'camR': "key", "name",
+// "kind", "initial") are the camera watcher's.
+#include "platform/CameraSource.h"
+
 namespace photos {
 
 enum {
@@ -21,10 +25,7 @@ enum {
 	// "note" (string, when there is something to tell the user).
 	kMsgVersionAdded = 'verA',
 	// A people operation finished (naming a group takes a moment).
-	kMsgPeopleChanged = 'pplC',
-	// Cameras (CameraSource.h): 'camA' / 'camR' with "key", "name", "kind".
-	kMsgCameraArrived = 'camA',
-	kMsgCameraRemoved = 'camR'
+	kMsgPeopleChanged = 'pplC'
 };
 
 }	// namespace photos

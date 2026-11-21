@@ -534,6 +534,13 @@ Session::ApplyDeviceSettings()
 	std::string text = std::string("open_on_connect ")
 		+ (fSettings.GetBool(setting::kOpenOnConnect, true) ? "true" : "false") + "\n";
 	WriteFile(JoinPath(fSettingsDirectory, "agent"), text.data(), text.size());
+	// The agent starts with the desktop; on the day Photos was installed
+	// nothing has started it yet.
+	const char* kAgent = "application/x-vnd.airos-Photos-Agent";
+	if (fStarted && getenv("PHOTOS_NO_AGENT") == nullptr
+		&& fSettings.GetBool(setting::kOpenOnConnect, true)
+		&& !be_roster->IsRunning(kAgent))
+		be_roster->Launch(kAgent);
 }
 
 }	// namespace photos

@@ -1,0 +1,12 @@
+# Photos: the agent that opens Photos when a camera, a phone or a memory card
+# with pictures is connected (installed as data/user_launch/photos_agent).
+# Not named after the agent's signature, like the other air/OS jobs that
+# start an application. "open_on_connect false" in
+# ~/config/settings/Photos/agent makes the agent do nothing.
+job photos-agent {
+	env /system/boot/SetupEnvironment
+	launch /boot/system/bin/photos_agent
+	on initial_volumes_mounted
+	legacy
+	no_safemode
+}

@@ -334,7 +334,7 @@ ImportView::AddHeaderButtons(HeaderView* header)
 	else
 		label = "Nothing new";
 	header->AddButton(label.String(), kMsgCameraImportNew,
-		kButtonAccent | (fresh == 0 ? kButtonDisabled : busy));
+		kButtonAccent | (fresh == 0 ? (uint32)kButtonDisabled : busy));
 }
 
 
@@ -436,9 +436,11 @@ ImportView::_Run()
 		status = camera->ListItems(items, &fStop, [this](int32 found) {
 			fFound = found;
 		});
-		if (status != B_OK && error.empty())
-			error = strerror(status);
+		if (status != B_OK)
+			error = camera->LastError();
 	}
+	if (status != B_OK && error.empty())
+		error = strerror(status);
 	if (fStop)
 		return;
 	// The newest first, as the library shows them.
@@ -483,6 +485,9 @@ ImportView::_Run()
 		if (fStop || window.SendMessage(&thumb) != B_OK)
 			delete bitmap;
 	}
+	// Done with the device for now (an import opens it again).
+	if (!fStop)
+		camera->Close();
 }
 
 

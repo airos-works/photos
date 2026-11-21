@@ -135,6 +135,7 @@ public:
 	bool		cancelSupported = true;
 	bool		cancelResponds = false;	// Transaction_Cancelled after a cancel
 	bool		allHandles = true;		// GetObjectHandles for a whole storage
+	bool		rootOnly = false;		// ... answered with the root's contents
 	bool		readOnly = false;
 	long		truncate = -1;			// sends only this much of an object
 	bool		silent = false;			// never answers
@@ -450,6 +451,11 @@ private:
 				}
 				std::vector<uint32_t> handles;
 				for (const FakeObject& object : objects) {
+					if (params[2] == 0 && rootOnly) {
+						if (object.parent == 0)
+							handles.push_back(object.handle);
+						continue;
+					}
 					if (params[2] == 0
 						|| (params[2] == kPtpRootParent && object.parent == 0)
 						|| object.parent == params[2]) {
@@ -870,6 +876,18 @@ TEST(PtpListByFolders)
 	std::vector<PtpObjectInfo> objects;
 	CHECK_EQ(session.ListObjects(objects), kPtpOk);
 	CheckListing(objects);
+
+	// A device that answers "everything" with what is in the root (QEMU's
+	// usb-mtp), and has an empty folder too.
+	FakeDevice rootOnly;
+	rootOnly.rootOnly = true;
+	rootOnly.Add(1, kPtpFormatAssociation, "EMPTY", 0);
+	PtpSession second(rootOnly);
+	CHECK_EQ(second.Open(), kPtpOk);
+	CHECK_EQ(second.ListObjects(objects), kPtpOk);
+	CHECK_EQ(objects.size(), (size_t)9);
+	CHECK(Named(objects, "IMG_0002.JPG") != nullptr);
+	CHECK(Named(objects, "EMPTY") != nullptr);
 }
 
 

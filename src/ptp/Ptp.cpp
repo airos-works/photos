@@ -1483,54 +1483,76 @@ PtpSession::_ListByHandles(const std::vector<uint32_t>& storages,
 {
 	std::unordered_set<uint32_t> seen;
 	for (uint32_t storage : storages) {
-		// Everything on the storage at once; devices that only answer for
-		// one folder at a time are walked from the root.
+		// Everything on the storage at once. Devices that do not answer
+		// that are asked for the root; and since some answer it with the
+		// root only, every folder nothing was listed in is asked for by
+		// itself afterwards.
 		std::vector<uint32_t> handles;
 		PtpStatus status = GetObjectHandles(storage, 0, 0, handles);
-		bool walk = false;
-		if (status == kPtpNotSupported || status == kPtpFailed) {
-			walk = true;
+		if (status == kPtpNotSupported || status == kPtpFailed)
 			status = GetObjectHandles(storage, 0, kPtpRootParent, handles);
-		}
 		if (status == kPtpStoreUnavailable)
 			continue;
 		if (status != kPtpOk)
 			return status;
 
-		for (size_t i = 0; i < handles.size(); i++) {
-			if (cancel != nullptr && *cancel)
-				return kPtpCancelled;
-			uint32_t handle = handles[i];
-			if (!seen.insert(handle).second)
-				continue;
-			PtpObjectInfo info;
-			status = GetObjectInfo(handle, info);
-			if (status == kPtpInvalidObject || status == kPtpFailed
-				|| status == kPtpProtocol) {
-				// Gone meanwhile, or an object the device cannot describe.
-				if (!fOpen)
+		std::vector<uint32_t> folders;
+		std::unordered_set<uint32_t> filled;	// folders with something in them
+		size_t next = 0;
+		size_t nextFolder = 0;
+		while (true) {
+			for (; next < handles.size(); next++) {
+				if (cancel != nullptr && *cancel)
+					return kPtpCancelled;
+				uint32_t handle = handles[next];
+				if (!seen.insert(handle).second)
+					continue;
+				PtpObjectInfo info;
+				status = GetObjectInfo(handle, info);
+				if (status == kPtpInvalidObject || status == kPtpFailed
+					|| status == kPtpProtocol) {
+					// Gone meanwhile, or an object the device cannot
+					// describe.
+					if (!fOpen)
+						return status;
+					continue;
+				}
+				if (status != kPtpOk)
 					return status;
-				continue;
+				if (info.storageId == 0)
+					info.storageId = storage;
+				objects.push_back(info);
+				if (info.parent != 0 && info.parent != kPtpRootParent)
+					filled.insert(info.parent);
+				if (info.IsFolder())
+					folders.push_back(handle);
+				if (progress && objects.size() % 16 == 0)
+					progress((int)objects.size());
 			}
-			if (status != kPtpOk)
-				return status;
-			if (info.storageId == 0)
-				info.storageId = storage;
-			objects.push_back(info);
-			if (progress && objects.size() % 16 == 0)
-				progress((int)objects.size());
 
-			if (walk && info.IsFolder()) {
+			bool more = false;
+			for (; nextFolder < folders.size() && !more; nextFolder++) {
+				if (cancel != nullptr && *cancel)
+					return kPtpCancelled;
+				uint32_t folder = folders[nextFolder];
+				if (filled.find(folder) != filled.end())
+					continue;
 				std::vector<uint32_t> children;
-				status = GetObjectHandles(storage, 0, handle, children);
+				status = GetObjectHandles(storage, 0, folder, children);
 				if (status == kPtpOk) {
-					handles.insert(handles.end(), children.begin(),
-						children.end());
+					for (uint32_t child : children) {
+						if (seen.find(child) == seen.end()) {
+							handles.push_back(child);
+							more = true;
+						}
+					}
 				} else if (status != kPtpInvalidObject
 					&& status != kPtpNotSupported && status != kPtpFailed) {
 					return status;
 				}
 			}
+			if (!more && nextFolder >= folders.size())
+				break;
 		}
 	}
 	if (progress)

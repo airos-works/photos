@@ -75,8 +75,13 @@ $(BUILD)/Photos: $(UI_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 	$(MIMESET) -f $@.new
 	mv $@.new $@
 
-$(BUILD)/photos_agent: $(AGENT_OBJ) $(BUILD)/photos_agent.rsrc
-	$(CXX) $(APP_LDFLAGS) -o $@.new $(AGENT_OBJ) -lbe -ldevice
+# The camera layer by itself (PTP/MTP over USB, volumes with a DCIM folder):
+# all the agent and tools/ptp-test/ptpls need of the application.
+CAMERA_OBJ = $(BUILD)/src/platform/CameraSource.o \
+	$(BUILD)/src/platform/UsbPtpTransport.o $(BUILD)/src/ptp/Ptp.o
+
+$(BUILD)/photos_agent: $(AGENT_OBJ) $(CAMERA_OBJ) $(BUILD)/photos_agent.rsrc
+	$(CXX) $(APP_LDFLAGS) -o $@.new $(AGENT_OBJ) $(CAMERA_OBJ) -lbe -ldevice
 	$(XRES) -o $@.new $(BUILD)/photos_agent.rsrc
 	$(MIMESET) -f $@.new
 	mv $@.new $@
@@ -86,7 +91,12 @@ $(BUILD)/photos_tool: $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 	$(CXX) $(APP_LDFLAGS) -o $@ $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) \
 		$(NET_OBJ) $(RAW_LINK) $(LIBS)
 
-HAIKU_DIRS = src/ui src/platform src/agent src/tool
+# ptpls: cameras from a shell, the test tool of the camera layer
+# (docs/DEVICES.md). Not part of "all": tools/build-cross.sh ARCH build-ARCH/ptpls
+$(BUILD)/ptpls: $(BUILD)/tools/ptp-test/ptpls.o $(CAMERA_OBJ)
+	$(CXX) $(APP_LDFLAGS) -o $@ $^ -lbe -ldevice
+
+HAIKU_DIRS = src/ui src/platform src/agent src/tool tools/ptp-test
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp
 	mkdir -p $$(dir $$@)

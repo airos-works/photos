@@ -1,0 +1,7 @@
+resource app_signature "application/x-vnd.airos-Photos-Agent";
+resource app_flags B_SINGLE_LAUNCH | B_BACKGROUND_APP;
+resource app_version {
+	major = 1, middle = 0, minor = 0, variety = B_APPV_FINAL, internal = 1,
+	short_info = "Photos agent",
+	long_info = "Opens Photos when a camera, phone or memory card with pictures is connected."
+};

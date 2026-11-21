@@ -31,8 +31,12 @@ puts LightCraft's RAW decoder behind a C interface.
 - `tools/vm/vm-up.sh` boots an air/OS test VM; `tools/vm/deploy.sh` copies a
   build into it, `tools/vm/app.sh` starts it, `tools/vm/hey.sh` scripts it
   (docs/TESTING.md).
-- The package is made by airos-ci: `AIROS_ARCH=x86_64 APPS=<dir with photos>
-  APPBUILD=<private dir> apps/build-app-packages.sh <out dir> photos`.
+- The package: `tools/package.sh x86_64|arm64` after a cross build makes
+  `artifacts/photos-<version>-<arch>.hpkg` by hand. The build server makes the
+  same with airos-ci (`build_photos` in `apps/build-app-packages.sh`), on
+  every push to `main` (`.github/workflows/airos.yml`; CI then pushes a
+  "[skip ci]" commit with the README's build links: `git pull --rebase`
+  before pushing). Keep the two recipes in step.
 
 ## Conventions
 

@@ -27,9 +27,12 @@ puts LightCraft's RAW decoder behind a C interface.
   (`/data1/airos/sdk/<arch>`, dependencies in `/data1/airos/deps/<arch>`).
   `SKIP_RAW=1` leaves the Rust library out.
 - `make check-host` runs the portable tests with ASan/UBSan.
-- `tools/vm/vm-up.sh` boots an air/OS test VM (see `tools/vm/README.md`);
-  `tools/vm/deploy.sh` copies a build into it.
-- `tools/package.sh x86_64` makes `artifacts/photos-<version>-<arch>.hpkg`.
+- `tools/test-sync.sh` runs the sync engine against `tools/fake-immich.py`.
+- `tools/vm/vm-up.sh` boots an air/OS test VM; `tools/vm/deploy.sh` copies a
+  build into it, `tools/vm/app.sh` starts it, `tools/vm/hey.sh` scripts it
+  (docs/TESTING.md).
+- The package is made by airos-ci: `AIROS_ARCH=x86_64 APPS=<dir with photos>
+  APPBUILD=<private dir> apps/build-app-packages.sh <out dir> photos`.
 
 ## Conventions
 
@@ -41,5 +44,8 @@ puts LightCraft's RAW decoder behind a C interface.
   rendered version file.
 - No credentials, tokens or personal pictures in the repository. Test
   pictures are generated (`tools/make-fixtures.py`) or public-domain.
+- **Never run a build that is signed in to a real Immich server without
+  `PHOTOS_NO_UPLOAD=1`** (a test library's pictures would be uploaded to it).
+  Uploads and deletions are tested against `tools/fake-immich.py`.
 - Commit as you go; `main` is the integration branch. Bump `version` in
   `resources/Photos.PackageInfo` for every package handed out.

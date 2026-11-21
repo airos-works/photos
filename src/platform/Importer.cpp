@@ -157,9 +157,11 @@ Importer::_Count(const ImportResult& result, const std::string& name)
 	fStatus.done++;
 	if (result.added || result.restored)
 		fStatus.added++;
-	else if (result.duplicate)
+	else if (result.duplicate || result.id != 0) {
+		// In the library already (also: known from Immich, and now with its
+		// original).
 		fStatus.duplicates++;
-	else if (result.id == 0) {
+	} else {
 		fStatus.failed++;
 		if (fStatus.error.empty())
 			fStatus.error = name + ": " + result.error;

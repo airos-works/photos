@@ -128,7 +128,8 @@ check-host:
 		SQLITE_LIBS="build-host/.deps/lib/libsqlite3.so" \
 		CORE_LIBS="build-host/.deps/lib/libsqlite3.so -lpthread -fsanitize=address,undefined" check
 
-# End-to-end Immich sync against tools/fake-immich.py (running).
+# End-to-end Immich sync against tools/fake-immich.py: tools/test-sync.sh
+# builds this and runs it with the server.
 INTEGRATION_SRC = $(wildcard tests/integration/*.cpp)
 $(BUILD)/photos_integration: $(call obj,$(INTEGRATION_SRC)) $(CORE_OBJ)
 	$(CXX) -o $@ $^ $(CORE_LIBS)
@@ -139,7 +140,6 @@ integration-host:
 		APP_CPPFLAGS="-Ibuild-host/.deps/include" \
 		CORE_LIBS="build-host/.deps/lib/libsqlite3.so -lpthread -fsanitize=address,undefined" \
 		build-host/photos_integration
-	build-host/photos_integration $(ONLY)
 
 clean:
 	rm -rf build-haiku build-host build-x86_64 build-arm64

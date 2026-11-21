@@ -18,6 +18,7 @@ public:
 	virtual void RefsReceived(BMessage* message);
 	virtual void ArgvReceived(int32 argc, char** argv);
 	virtual void MessageReceived(BMessage* message);
+	virtual status_t GetSupportedSuites(BMessage* data);
 	virtual void AboutRequested();
 	virtual bool QuitRequested();
 

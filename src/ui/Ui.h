@@ -83,8 +83,11 @@ enum {
 	kMsgCameraImportNew = 'cmIn',
 	kMsgCameraImportSelected = 'cmIs',
 	kMsgCameraImportAll = 'cmIa',
-	// Tests and scripting: "hey Photos 'tstQ'" answers with the state.
-	kMsgTestQuery = 'tstQ'
+	// Scripting (App.cpp lists the commands for hey): the window's state,
+	// selecting a photo ("id"), setting the editor's values ("json").
+	kMsgTestQuery = 'tstQ',
+	kMsgTestSelect = 'tstS',
+	kMsgTestEdit = 'tstE'
 };
 
 enum SidebarItem {

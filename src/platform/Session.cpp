@@ -233,6 +233,10 @@ Session::ApplySyncSettings()
 		options.apiKey = fSettings.GetString(setting::kImmichApiKey);
 	}
 	options.upload = fSettings.GetBool(setting::kImmichUpload, true);
+	// Tests against a real server must never send anything to it.
+	const char* noUpload = getenv("PHOTOS_NO_UPLOAD");
+	if (noUpload != nullptr && noUpload[0] != '\0')
+		options.upload = false;
 	options.keepOriginals = fSettings.GetBool(setting::kImmichKeepOriginals, false);
 	options.trashOnServer = fSettings.GetBool(setting::kImmichTrashOnServer, false);
 	fSync.SetOptions(options);

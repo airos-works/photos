@@ -37,6 +37,20 @@ const uint32 kMsgSelectNone = 'selN';
 const uint32 kMsgZoomFit = 'zmFt';
 const uint32 kMsgZoomActual = 'zmAc';
 
+// A number from a message, whichever integer type it was sent as (hey sends
+// int32).
+int64_t
+Id(const BMessage* message, const char* name)
+{
+	int64 value;
+	if (message->FindInt64(name, &value) == B_OK)
+		return value;
+	int32 small;
+	if (message->FindInt32(name, &small) == B_OK)
+		return small;
+	return 0;
+}
+
 const char* const kGroupModeSetting = "ui.group_mode";
 const char* const kInfoSetting = "ui.info";
 const char* const kFrameSetting = "ui.frame";
@@ -1074,9 +1088,9 @@ MainWindow::_NamePerson(BMessage* message)
 	std::string name = message->GetString("name", "");
 	if (name.empty())
 		return;
-	int64_t cluster = message->GetInt64("cluster", 0);
-	int64_t face = message->GetInt64("face", 0);
-	int64_t person = message->GetInt64("person", 0);
+	int64_t cluster = Id(message, "cluster");
+	int64_t face = Id(message, "face");
+	int64_t person = Id(message, "person");
 	fBusyCount++;
 	fBusyText = "Looking for more of this person…";
 	_UpdateStatus();
@@ -1286,7 +1300,7 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case kMsgTileReady:
 		{
-			int64_t face = message->GetInt64("face", 0);
+			int64_t face = Id(message, "face");
 			if (face != 0) {
 				if (fCard == kCardPeople)
 					fPeopleView->TileReady(face);
@@ -1295,7 +1309,7 @@ MainWindow::MessageReceived(BMessage* message)
 				if (fSidePanelShown == 1)
 					fInfo->TileReady(face);
 			} else if (fCard == kCardGrid)
-				fGrid->TileReady(message->GetInt64("id", 0));
+				fGrid->TileReady(Id(message, "id"));
 			break;
 		}
 
@@ -1315,7 +1329,7 @@ MainWindow::MessageReceived(BMessage* message)
 				int32 added = message->GetInt32("added", 0);
 				int32 duplicates = message->GetInt32("duplicates", 0);
 				int32 failed = message->GetInt32("failed", 0);
-				int64_t importId = message->GetInt64("import", 0);
+				int64_t importId = Id(message, "import");
 				fImportView->ImportFinished();
 				_RebuildSidebar();
 				if (added > 0 && importId != 0 && !fViewerOpen)
@@ -1407,7 +1421,7 @@ MainWindow::MessageReceived(BMessage* message)
 		case kMsgShowView:
 		{
 			int32 item = message->GetInt32("item", kItemPhotos);
-			int64_t argument = message->GetInt64("argument", 0);
+			int64_t argument = Id(message, "argument");
 #ifdef PHOTOS_HAVE_CAMERAS
 			if (item == kItemCamera) {
 				const char* key = message->GetString("key", nullptr);
@@ -1463,7 +1477,7 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case kMsgOpenPhoto:
 		{
-			int64_t id = message->GetInt64("id", 0);
+			int64_t id = Id(message, "id");
 			if (id == 0)
 				id = _Target();
 			_OpenViewer(id);
@@ -1548,7 +1562,7 @@ MainWindow::MessageReceived(BMessage* message)
 		case kMsgShowVersion:
 			if (fViewerOpen && !fEdit->IsActive()) {
 				fSession.Lib().SetCurrentVersion(fViewer->PhotoId(),
-					message->GetInt64("version", 0));
+					Id(message, "version"));
 			}
 			break;
 
@@ -1561,7 +1575,7 @@ MainWindow::MessageReceived(BMessage* message)
 				"Cancel", "Delete", nullptr, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 			alert->SetShortcut(0, B_ESCAPE);
 			if (alert->Go() == 1)
-				fSession.Lib().DeleteVersion(message->GetInt64("version", 0));
+				fSession.Lib().DeleteVersion(Id(message, "version"));
 			break;
 		}
 
@@ -1633,7 +1647,7 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgEditSourceReady:
-			if (!fEdit->IsActive() || message->GetInt64("id", 0) != fEdit->PhotoId())
+			if (!fEdit->IsActive() || Id(message, "id") != fEdit->PhotoId())
 				break;
 			if (!message->GetBool("ok", false)) {
 				_Alert("Edit", message->GetString("error", "The picture cannot be read."));
@@ -1837,7 +1851,7 @@ MainWindow::MessageReceived(BMessage* message)
 
 		// --- People ---
 		case kMsgOpenPerson:
-			_ShowView(kItemPerson, message->GetInt64("person", 0), true);
+			_ShowView(kItemPerson, Id(message, "person"), true);
 			break;
 
 		case kMsgNameCluster:
@@ -1848,9 +1862,9 @@ MainWindow::MessageReceived(BMessage* message)
 			BString initial;
 			const char* title = "Who is this?";
 			if (message->what == kMsgNameCluster)
-				reply.AddInt64("cluster", message->GetInt64("cluster", 0));
+				reply.AddInt64("cluster", Id(message, "cluster"));
 			else if (message->what == kMsgNameFace) {
-				int64_t faceId = message->GetInt64("face", 0);
+				int64_t faceId = Id(message, "face");
 				reply.AddInt64("face", faceId);
 				Face face;
 				Person person;
@@ -1858,7 +1872,7 @@ MainWindow::MessageReceived(BMessage* message)
 					&& fSession.Lib().GetPerson(face.personId, person))
 					initial = person.name.c_str();
 			} else {
-				int64_t personId = message->GetInt64("person", 0);
+				int64_t personId = Id(message, "person");
 				reply.AddInt64("person", personId);
 				Person person;
 				if (fSession.Lib().GetPerson(personId, person))
@@ -1876,8 +1890,8 @@ MainWindow::MessageReceived(BMessage* message)
 		case kMsgConfirmFace:
 		case kMsgRejectFace:
 		{
-			int64_t face = message->GetInt64("face", 0);
-			int64_t person = message->GetInt64("person", 0);
+			int64_t face = Id(message, "face");
+			int64_t person = Id(message, "person");
 			bool confirm = message->what == kMsgConfirmFace;
 			Session* session = &fSession;
 			BMessenger me(this);
@@ -1893,7 +1907,7 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case kMsgDeletePerson:
 		{
-			int64_t personId = message->GetInt64("person", 0);
+			int64_t personId = Id(message, "person");
 			Person person;
 			if (!fSession.Lib().GetPerson(personId, person))
 				break;
@@ -1936,6 +1950,38 @@ MainWindow::MessageReceived(BMessage* message)
 		case kMsgTestQuery:
 			_AnswerTestQuery(message);
 			break;
+
+		case kMsgTestSelect:
+		{
+			if (fCard != kCardGrid)
+				break;
+			int64_t id;
+			fGrid->ClearSelection();
+			for (int32 i = 0; message->FindInt64("id", i, &id) == B_OK; i++) {
+				if (i == 0)
+					fGrid->Select(id, true);
+			}
+			// hey sends numbers as int32.
+			int32 small;
+			if (message->FindInt32("id", &small) == B_OK)
+				fGrid->Select(small, true);
+			break;
+		}
+
+		case kMsgTestEdit:
+		{
+			EditParams params;
+			if (!fEdit->IsActive() || !fEdit->IsReady()
+				|| !EditParams::FromJson(message->GetString("json", ""), params))
+				break;
+			fEditPanel->SetParams(params);
+			fEdit->SetParams(params);
+			if (fViewer->InCropMode()) {
+				fViewer->SetCropMode(true, params.cropX, params.cropY, params.cropW,
+					params.cropH, 0);
+			}
+			break;
+		}
 
 		case B_COLORS_UPDATED:
 			Theme::Refresh();

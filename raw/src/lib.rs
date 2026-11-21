@@ -105,16 +105,37 @@ pub fn version() -> &'static str {
     }
 }
 
-/// The work runs on rayon's global pool; `PHOTOS_RAW_THREADS=n` sizes it (before anything else
-/// in the process has started it).
+/// Threads asked for with [`set_threads`] before the pool started; 0: none.
+static THREADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static POOL: Once = Once::new();
+
+/// How many threads the pool gets when nobody says: three quarters of the CPUs, at most 16 (a
+/// machine that does nothing else gains little from the rest, and one that shows a window while
+/// pictures develop keeps something for it).
+fn default_threads() -> usize {
+    let cpus = std::thread::available_parallelism().map(usize::from).unwrap_or(1);
+    if cpus <= 4 { cpus } else { (cpus * 3 / 4).min(16) }
+}
+
+/// Sets the size of the thread pool the work runs on. Only before the first call that does any
+/// work: `false` when the pool exists already (or `threads` is 0).
+pub fn set_threads(threads: usize) -> bool {
+    if threads == 0 || POOL.is_completed() {
+        return false;
+    }
+    THREADS.store(threads.min(256), std::sync::atomic::Ordering::SeqCst);
+    true
+}
+
+/// The work runs on rayon's global pool, sized by [`set_threads`], else `PHOTOS_RAW_THREADS=n`,
+/// else [`default_threads`].
 fn init_pool() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        let threads = std::env::var("PHOTOS_RAW_THREADS").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|&n| n > 0);
-        if let Some(n) = threads {
-            // (an error means the pool exists already: its size stands)
-            let _ = rayon::ThreadPoolBuilder::new().num_threads(n.min(256)).thread_name(|i| format!("photos raw {i}")).build_global();
-        }
+    POOL.call_once(|| {
+        let asked = THREADS.load(std::sync::atomic::Ordering::SeqCst);
+        let env = || std::env::var("PHOTOS_RAW_THREADS").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|&n| n > 0);
+        let n = if asked > 0 { asked } else { env().unwrap_or_else(default_threads) };
+        // (an error means something else in the program started rayon's pool: its size stands)
+        let _ = rayon::ThreadPoolBuilder::new().num_threads(n.clamp(1, 256)).thread_name(|i| format!("photos raw {i}")).build_global();
     });
 }
 
@@ -187,6 +208,7 @@ fn raw_error(e: lightcraft_raw::RawError) -> Error {
 
 /// Size, orientation and EXIF facts of a RAW file, from its headers.
 pub fn info(bytes: &[u8]) -> Result<Info> {
+    init_pool();
     if !is_raw(bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
@@ -242,6 +264,7 @@ fn encode_jpeg(img: &Rgba8) -> Result<Vec<u8>> {
 /// The embedded preview of a RAW file as a JPEG: the largest, or with `min_edge > 0` the smallest
 /// whose long edge is at least that.
 pub fn preview_jpeg(bytes: &[u8], min_edge: u32) -> Result<PreviewJpeg> {
+    init_pool();
     if !is_raw(bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
     }
@@ -293,8 +316,7 @@ pub fn default_settings(info: &SourceInfo) -> DevelopSettings {
 }
 
 /// Develops a RAW file as LightCraft shows it unedited: upright sRGB, the long edge at most
-/// `max_edge` (0: full size). Takes the file's bytes: they are freed as soon as the sensor data is
-/// decoded.
+/// `max_edge` (0: full size). Takes the file's bytes: they are freed before the picture is rendered.
 pub fn develop(bytes: Vec<u8>, max_edge: u32) -> Result<Rgba8> {
     if !is_raw(&bytes) {
         return Err(Error::NotRaw("not a RAW file".into()));
@@ -370,6 +392,7 @@ fn codec_error(e: lightcraft_codecs::Error) -> Error {
 
 /// Size and EXIF facts of a HEIF file.
 pub fn heif_info(bytes: &[u8]) -> Result<Info> {
+    init_pool();
     heif_checked(bytes)?;
     let header = lightcraft_codecs::read_header(bytes).map_err(codec_error)?;
     let o = Orientation::from_exif(header.orientation);

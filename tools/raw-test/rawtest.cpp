@@ -19,6 +19,11 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 
+#ifdef __HAIKU__
+#include <OS.h>
+#endif
+
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -39,19 +44,43 @@ Now()
 }
 
 
+#ifdef __HAIKU__
+// Haiku's getrusage() has no peak memory: a thread adds up the memory behind
+// the team's areas forty times a second and keeps the largest sum.
+static std::atomic<long> sPeakKiB(0);
+static std::atomic<bool> sSampling(true);
+
+
+static void
+SampleMemory()
+{
+	while (sSampling) {
+		size_t total = 0;
+		ssize_t cookie = 0;
+		area_info info;
+		while (get_next_area_info(B_CURRENT_TEAM, &cookie, &info) == B_OK)
+			total += info.ram_size;
+		long now = (long)(total / 1024);
+		if (now > sPeakKiB)
+			sPeakKiB = now;
+		snooze(25000);
+	}
+}
+
+
+static long
+PeakKiB()
+{
+	return sPeakKiB;
+}
+#else
 static long
 PeakKiB()
 {
 	rusage usage;
-	if (getrusage(RUSAGE_SELF, &usage) != 0)
-		return 0;
-#ifdef __HAIKU__
-	// Haiku reports ru_maxrss in bytes... or not at all: say what there is.
-	return usage.ru_maxrss > (1 << 22) ? usage.ru_maxrss / 1024 : usage.ru_maxrss;
-#else
-	return usage.ru_maxrss;
-#endif
+	return getrusage(RUSAGE_SELF, &usage) == 0 ? usage.ru_maxrss : 0;
 }
+#endif
 
 
 static bool
@@ -168,6 +197,15 @@ main(int argc, char** argv)
 	}
 	std::string command = argv[1];
 	char error[256];
+#ifdef __HAIKU__
+	std::thread(SampleMemory).detach();
+#endif
+	// RAWTEST_THREADS=n: the pool's size through the interface (the library
+	// reads PHOTOS_RAW_THREADS itself)
+	if (getenv("RAWTEST_THREADS") != nullptr) {
+		int code = photos_raw_set_threads(atoi(getenv("RAWTEST_THREADS")));
+		printf("set_threads(%s): %d\n", getenv("RAWTEST_THREADS"), code);
+	}
 	if (command == "version") {
 		printf("%s; heif %s\n", photos_raw_version(),
 			photos_heif_available() ? "built in" : "not built");
@@ -201,6 +239,9 @@ main(int argc, char** argv)
 		failures += strlen(tiny) != sizeof(tiny) - 1;
 		photos_raw_free_image(nullptr);
 		photos_raw_free(nullptr, 0);
+		// the pool has started (the panic on a pool thread): too late to size it
+		failures += photos_raw_set_threads(0) != PHOTOS_RAW_ARGUMENT;
+		failures += photos_raw_set_threads(4) != PHOTOS_RAW_ARGUMENT;
 		uint8_t garbage[4096];
 		for (size_t i = 0; i < sizeof(garbage); i++)
 			garbage[i] = (uint8_t)(i * 2654435761u >> 13);

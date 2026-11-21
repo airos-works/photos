@@ -9,9 +9,10 @@
  * NUL-terminated, cut to `error_size`). Nothing here aborts the program on a
  * damaged file: a panic inside the decoder comes back as PHOTOS_RAW_INTERNAL.
  *
- * The work runs on a thread pool shared by all calls (one thread per CPU;
- * PHOTOS_RAW_THREADS=n in the environment, read at the first call, sets its
- * size).
+ * The work runs on a thread pool shared by all calls. Its size is set once,
+ * when the first call needs it: photos_raw_set_threads(n) if that was called
+ * before, else PHOTOS_RAW_THREADS=n in the environment, else three quarters
+ * of the CPUs (all of four or fewer), at most 16.
  */
 #ifndef PHOTOS_RAW_H
 #define PHOTOS_RAW_H
@@ -108,6 +109,10 @@ int photos_heif_info_file(const char* path, photos_raw_info* out, char* error, s
 /* Upright, sRGB; max_edge as for photos_raw_develop_file (0 = full size). */
 int photos_heif_decode_file(const char* path, uint32_t max_edge, photos_raw_image* out,
 	char* error, size_t error_size);
+
+/* Sets the size of the thread pool; only before the first call that does
+   work. PHOTOS_RAW_OK, or PHOTOS_RAW_ARGUMENT when n < 1 or it is too late. */
+int photos_raw_set_threads(int n);
 
 /* "photos-raw 0.1.0 (lightcraft 8fb1f41f, heif)": a static string. */
 const char* photos_raw_version(void);

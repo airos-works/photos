@@ -343,6 +343,14 @@ pub unsafe extern "C" fn photos_heif_decode_file(path: *const c_char, max_edge: 
     unsafe { image_out(out, error, error_size, || crate::heif_decode_file(path_of(path)?, max_edge)) }
 }
 
+/// `photos_raw_set_threads`: 0 when the pool will have `threads` threads, -6 when `threads` is
+/// less than 1 or the pool has started.
+#[unsafe(no_mangle)]
+pub extern "C" fn photos_raw_set_threads(threads: i32) -> i32 {
+    let applied = usize::try_from(threads).is_ok_and(crate::set_threads);
+    if applied { 0 } else { Error::Argument(String::new()).code() }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn photos_raw_version() -> *const c_char {
     static VERSION: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
@@ -364,6 +372,7 @@ pub unsafe extern "C" fn photos_raw_selftest(what: i32, error: *mut c_char, erro
             2 => Err(Error::Unsupported("selftest: unsupported".into())),
             // a panic on a pool thread reaches the caller through rayon
             3 => {
+                crate::init_pool();
                 rayon::scope(|s| s.spawn(|_| panic!("selftest panic on a pool thread")));
                 Ok(())
             }

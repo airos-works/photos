@@ -1,0 +1,3 @@
+#!/bin/sh
+# The air/OS cross g++ with the SDK sysroot (tools/raw-env.sh sets the variables).
+exec "${AIROS_CROSS}g++" --sysroot="$AIROS_SYSROOT" -specs="$AIROS_UNWIND_SPECS" "$@"

@@ -136,6 +136,7 @@ public:
 	bool		cancelResponds = false;	// Transaction_Cancelled after a cancel
 	bool		allHandles = true;		// GetObjectHandles for a whole storage
 	bool		rootOnly = false;		// ... answered with the root's contents
+	bool		noParentFilter = false;	// cannot list one folder
 	bool		readOnly = false;
 	long		truncate = -1;			// sends only this much of an object
 	bool		silent = false;			// never answers
@@ -445,7 +446,8 @@ private:
 					_Respond(kPtpRespStoreNotAvailable, id);
 					break;
 				}
-				if (params[2] == 0 && !allHandles) {
+				if ((params[2] == 0 && !allHandles)
+					|| (params[2] != 0 && noParentFilter)) {
 					_Respond(kPtpRespParameterNotSupported, id);
 					break;
 				}
@@ -888,6 +890,66 @@ TEST(PtpListByFolders)
 	CHECK_EQ(objects.size(), (size_t)9);
 	CHECK(Named(objects, "IMG_0002.JPG") != nullptr);
 	CHECK(Named(objects, "EMPTY") != nullptr);
+
+	// A device that cannot list one folder: every handle, one by one.
+	for (int variant = 0; variant < 2; variant++) {
+		FakeDevice flat;
+		flat.noParentFilter = true;
+		flat.rootOnly = variant != 0;
+		PtpSession third(flat);
+		CHECK_EQ(third.Open(), kPtpOk);
+		CHECK_EQ(third.ListObjects(objects), kPtpOk);
+		// (what is below the root cannot be had from one that answers
+		// "everything" with the root and cannot list a folder either)
+		if (variant == 0)
+			CheckListing(objects);
+		else
+			CHECK_EQ(objects.size(), (size_t)2);
+	}
+}
+
+
+TEST(PtpListOnlySomeFolders)
+{
+	// A phone: the camera's folder, and those of a hundred programs.
+	FakeDevice device;
+	device.Add(0, kPtpFormatAssociation, "Android", 0);				// 9
+	device.Add(9, kPtpFormatAssociation, "data", 0);				// 10
+	device.Add(10, kPtpFormatJpeg, "cache.jpg", 100);				// 11
+	device.Add(2, kPtpFormatAssociation, ".thumbnails", 0);			// 12
+	device.Add(12, kPtpFormatJpeg, "t.jpg", 100);					// 13
+	PtpSession session(device);
+	CHECK_EQ(session.Open(), kPtpOk);
+
+	std::vector<PtpObjectInfo> objects;
+	CHECK_EQ(session.ListObjects(objects), kPtpOk);
+	CHECK_EQ(objects.size(), (size_t)13);
+
+	PtpFolderFilter enter = [](const PtpObjectInfo& folder, int depth) {
+		if (depth == 0)
+			return folder.filename == "DCIM";
+		return folder.filename[0] != '.';
+	};
+	size_t before = device.log.size();
+	CHECK_EQ(session.ListObjects(objects, nullptr, nullptr, enter), kPtpOk);
+	// the root's three, 100TEST, its five pictures and the hidden folder
+	CHECK_EQ(objects.size(), (size_t)10);
+	CHECK(Named(objects, "IMG_0001.JPG") != nullptr);
+	CHECK(Named(objects, "Android") != nullptr);
+	CHECK(Named(objects, "cache.jpg") == nullptr);
+	CHECK(Named(objects, "t.jpg") == nullptr);
+	// and the device was not asked about the rest
+	for (size_t i = before; i < device.log.size(); i++)
+		CHECK(device.log[i] != kPtpOpGetObject);
+	CHECK(device.Idle());
+
+	// With the property list everything comes anyway.
+	device.propList = true;
+	device.mtp = true;
+	PtpSession second(device);
+	CHECK_EQ(second.Open(), kPtpOk);
+	CHECK_EQ(second.ListObjects(objects, nullptr, nullptr, enter), kPtpOk);
+	CHECK_EQ(objects.size(), (size_t)13);
 }
 
 

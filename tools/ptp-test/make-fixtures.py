@@ -140,9 +140,11 @@ def main():
         subprocess.run(['truncate', '-s', '96M', card], check=True)
         subprocess.run(['mkfs.vfat', '-F', '32', '-n', 'TESTCARD', card], check=True,
                        stdout=subprocess.DEVNULL)
+        # mtools writes long names in the locale's character set: UTF-8
+        utf8 = dict(os.environ, LC_ALL='C.UTF-8')
         for top in sorted(os.listdir(phone)):
             subprocess.run(['mcopy', '-i', card, '-s', '-m', os.path.join(phone, top), '::'],
-                           check=True)
+                           check=True, env=utf8)
     except (OSError, subprocess.CalledProcessError) as error:
         print('card.img not made:', error)
     print(len(files), 'files in', phone)

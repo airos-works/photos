@@ -208,6 +208,11 @@ const uint64_t kPtpSizeUnknown = UINT64_MAX;
 typedef std::function<bool(const uint8_t* data, size_t length, uint64_t total)>
 	PtpDataSink;
 
+// Whether a listing goes into a folder; depth 0 is a folder in the root of
+// a storage.
+typedef std::function<bool(const PtpObjectInfo& folder, int depth)>
+	PtpFolderFilter;
+
 
 class PtpSession {
 public:
@@ -247,14 +252,20 @@ public:
 	// MTP: the size of an object of 4 GiB or more.
 			PtpStatus			GetObjectSize(uint32_t handle, uint64_t& size);
 
-	// Every object of the device (folders too: IsFolder()), by the fastest
-	// way the device has: MTP's GetObjectPropList in one go, else handles
-	// and one GetObjectInfo each. A locked phone that shows no storage
-	// gives kPtpAccessDenied. progress is told how many are known so far.
+	// The objects of the device (folders too: IsFolder()), by the fastest
+	// way the device has: MTP's GetObjectPropList for everything in one
+	// go; else folder by folder from the root with one GetObjectInfo per
+	// object, entering only the folders `enter` says yes to (all, without
+	// it); else, for devices that cannot list a folder, every handle and
+	// its GetObjectInfo. So `enter` saves time where it can, and the caller
+	// still has to pick what it wants from the result. A locked phone that
+	// shows no storage gives kPtpAccessDenied. progress is told how many
+	// are known so far.
 			PtpStatus			ListObjects(std::vector<PtpObjectInfo>& objects,
 									const std::atomic<bool>* cancel = nullptr,
 									const std::function<void(int found)>& progress
-										= nullptr);
+										= nullptr,
+									const PtpFolderFilter& enter = nullptr);
 
 	// The response code of the last operation, and its name with the
 	// operation's, for logs: "GetObject: Invalid_ObjectHandle".
@@ -295,6 +306,12 @@ private:
 									std::vector<PtpObjectInfo>& objects,
 									const std::atomic<bool>* cancel,
 									const std::function<void(int)>& progress);
+			PtpStatus			_ListByTree(
+									const std::vector<uint32_t>& storages,
+									std::vector<PtpObjectInfo>& objects,
+									const std::atomic<bool>* cancel,
+									const std::function<void(int)>& progress,
+									const PtpFolderFilter& enter);
 			PtpStatus			_ListByHandles(
 									const std::vector<uint32_t>& storages,
 									std::vector<PtpObjectInfo>& objects,

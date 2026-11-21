@@ -1368,7 +1368,7 @@ PtpSession::_ListByPropList(std::vector<PtpObjectInfo>& objects,
 		return true;
 	};
 	PtpStatus status = _Transaction(kMtpOpGetObjectPropList, params, 5, &sink,
-		result, kPtpSizeUnknown, 10);
+		result, kPtpSizeUnknown, 4);
 	if (tooLarge)
 		return kPtpProtocol;
 	if (status != kPtpOk)
@@ -1476,6 +1476,88 @@ PtpSession::_ListByPropList(std::vector<PtpObjectInfo>& objects,
 }
 
 
+// Folder by folder from the root, going only where the caller wants to go:
+// on a phone that is the difference between its camera folder and every
+// file of every program. kPtpNotSupported if the device cannot say what is
+// in a folder.
+PtpStatus
+PtpSession::_ListByTree(const std::vector<uint32_t>& storages,
+	std::vector<PtpObjectInfo>& objects, const std::atomic<bool>* cancel,
+	const std::function<void(int)>& progress, const PtpFolderFilter& enter)
+{
+	std::unordered_set<uint32_t> seen;
+	bool asked = false;
+	for (uint32_t storage : storages) {
+		std::vector<uint32_t> handles;
+		PtpStatus status = GetObjectHandles(storage, 0, kPtpRootParent,
+			handles);
+		if (status == kPtpStoreUnavailable)
+			continue;
+		if (status == kPtpNotSupported || status == kPtpFailed) {
+			objects.clear();
+			return kPtpNotSupported;
+		}
+		if (status != kPtpOk)
+			return status;
+
+		std::vector<int> depths(handles.size(), 0);
+		for (size_t next = 0; next < handles.size(); next++) {
+			if (cancel != nullptr && *cancel)
+				return kPtpCancelled;
+			uint32_t handle = handles[next];
+			if (!seen.insert(handle).second)
+				continue;
+			PtpObjectInfo info;
+			status = GetObjectInfo(handle, info);
+			if (status == kPtpInvalidObject || status == kPtpFailed
+				|| status == kPtpProtocol) {
+				// Gone meanwhile, or an object the device cannot describe.
+				if (!fOpen)
+					return status;
+				continue;
+			}
+			if (status != kPtpOk)
+				return status;
+			if (info.storageId == 0)
+				info.storageId = storage;
+			objects.push_back(info);
+			if (progress && objects.size() % 16 == 0)
+				progress((int)objects.size());
+
+			if (!info.IsFolder() || depths[next] >= 32
+				|| (enter && !enter(info, depths[next]))) {
+				continue;
+			}
+			std::vector<uint32_t> children;
+			status = GetObjectHandles(storage, 0, handle, children);
+			if (status == kPtpNotSupported || status == kPtpFailed) {
+				if (!asked) {
+					// It cannot do this at all.
+					objects.clear();
+					return kPtpNotSupported;
+				}
+				continue;
+			}
+			if (status == kPtpInvalidObject)
+				continue;
+			if (status != kPtpOk)
+				return status;
+			asked = true;
+			for (uint32_t child : children) {
+				if (seen.find(child) == seen.end()) {
+					handles.push_back(child);
+					depths.push_back(depths[next] + 1);
+				}
+			}
+		}
+	}
+	if (progress)
+		progress((int)objects.size());
+	return kPtpOk;
+}
+
+
+// Everything at once, for devices that cannot be walked.
 PtpStatus
 PtpSession::_ListByHandles(const std::vector<uint32_t>& storages,
 	std::vector<PtpObjectInfo>& objects, const std::atomic<bool>* cancel,
@@ -1563,7 +1645,8 @@ PtpSession::_ListByHandles(const std::vector<uint32_t>& storages,
 
 PtpStatus
 PtpSession::ListObjects(std::vector<PtpObjectInfo>& objects,
-	const std::atomic<bool>* cancel, const std::function<void(int)>& progress)
+	const std::atomic<bool>* cancel, const std::function<void(int)>& progress,
+	const PtpFolderFilter& enter)
 {
 	objects.clear();
 	if (!fOpen)
@@ -1604,7 +1687,11 @@ PtpSession::ListObjects(std::vector<PtpObjectInfo>& objects,
 			// The fast way upset the device and it was reset.
 			return status;
 		}
-		status = _ListByHandles(storages, objects, cancel, progress);
+		status = _ListByTree(storages, objects, cancel, progress, enter);
+		if (status == kPtpNotSupported && fOpen) {
+			objects.clear();
+			status = _ListByHandles(storages, objects, cancel, progress);
+		}
 		if (status != kPtpOk) {
 			objects.clear();
 			return status;

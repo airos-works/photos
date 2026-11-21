@@ -131,6 +131,16 @@ IsJpegName(const std::string& name)
 }
 
 
+// The folders in the root of a camera's or phone's storage that hold what
+// a person calls its pictures.
+bool
+IsCameraFolder(const std::string& name)
+{
+	return strcasecmp(name.c_str(), "DCIM") == 0
+		|| strcasecmp(name.c_str(), "Pictures") == 0;
+}
+
+
 // #pragma mark - PTP/MTP
 
 
@@ -180,14 +190,38 @@ public:
 		if (fSession == NULL)
 			return _Fail(kPtpNoSession);
 
+		// A phone holds the pictures of every program on it, their caches
+		// too. What a person means by "the pictures on the phone" is in
+		// DCIM (the camera) and Pictures (screenshots, saved pictures):
+		// only those are looked into, where the device can be walked, and
+		// only what is in them is listed. A device with neither is taken
+		// whole.
+		PtpFolderFilter enter = [](const PtpObjectInfo& folder, int depth) {
+			if (depth == 0)
+				return IsCameraFolder(folder.filename);
+			return !folder.filename.empty() && folder.filename[0] != '.';
+		};
+		auto report = [&](int found) {
+			if (progress)
+				progress(found);
+		};
 		std::vector<PtpObjectInfo> objects;
-		PtpStatus status = fSession->ListObjects(objects, cancel,
-			[&](int found) {
-				if (progress)
-					progress(found);
-			});
+		PtpStatus status = fSession->ListObjects(objects, cancel, report,
+			enter);
 		if (status != kPtpOk)
 			return _Fail(status);
+		bool cameraFolders = false;
+		for (const PtpObjectInfo& object : objects) {
+			if (object.IsFolder() && _IsRoot(object.parent)
+				&& IsCameraFolder(object.filename)) {
+				cameraFolders = true;
+			}
+		}
+		if (!cameraFolders) {
+			status = fSession->ListObjects(objects, cancel, report);
+			if (status != kPtpOk)
+				return _Fail(status);
+		}
 
 		std::unordered_map<uint32, size_t> index;
 		for (size_t i = 0; i < objects.size(); i++)
@@ -197,7 +231,7 @@ public:
 			if (object.IsFolder())
 				continue;
 			PtpMediaKind kind = PtpMediaKindOf(object.filename, object.format);
-			if (kind == kPtpMediaOther)
+			if (kind == kPtpMediaOther || object.filename[0] == '.')
 				continue;
 
 			CameraItem item;
@@ -221,16 +255,22 @@ public:
 
 			// The folders above it, the outermost first.
 			uint32 parent = object.parent;
-			for (int depth = 0; parent != 0 && parent != 0xFFFFFFFF
-					&& depth < kMaxFolderDepth; depth++) {
+			bool hidden = false;
+			std::string top;
+			for (int depth = 0; !_IsRoot(parent) && depth < kMaxFolderDepth;
+					depth++) {
 				auto found = index.find(parent);
 				if (found == index.end())
 					break;
 				const PtpObjectInfo& folder = objects[found->second];
 				item.folder = item.folder.empty() ? folder.filename
 					: folder.filename + "/" + item.folder;
+				hidden = hidden || folder.filename[0] == '.';
+				top = folder.filename;
 				parent = folder.parent;
 			}
+			if (hidden || (cameraFolders && !IsCameraFolder(top)))
+				continue;
 			items.push_back(item);
 		}
 		fError.clear();
@@ -346,6 +386,11 @@ public:
 	}
 
 private:
+	static bool _IsRoot(uint32 parent)
+	{
+		return parent == 0 || parent == 0xFFFFFFFF;
+	}
+
 	status_t _Open()
 	{
 		status_t status = fTransport.Open(fPath.c_str());

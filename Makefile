@@ -96,6 +96,12 @@ $(BUILD)/photos_tool: $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 $(BUILD)/ptpls: $(BUILD)/tools/ptp-test/ptpls.o $(CAMERA_OBJ)
 	$(CXX) $(APP_LDFLAGS) -o $@ $^ -lbe -ldevice
 
+# A stand-in for Photos (its signature, a log of the camera messages it
+# gets) for testing the agent by itself.
+$(BUILD)/fake_photos: $(BUILD)/tools/ptp-test/fake-photos.o $(BUILD)/Photos.rsrc
+	$(CXX) $(APP_LDFLAGS) -o $@ $(BUILD)/tools/ptp-test/fake-photos.o -lbe
+	$(XRES) -o $@ $(BUILD)/Photos.rsrc
+
 HAIKU_DIRS = src/ui src/platform src/agent src/tool tools/ptp-test
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp

@@ -15,11 +15,14 @@
 namespace photos {
 
 struct CameraItem {
-	std::string id;			// stable within the device: PTP object handle (hex) or path relative to the volume root
+	// Stable within the device: the PTP object handle (hex) or the path
+	// relative to the volume's root.
+	std::string id;
 	std::string name;		// file name
 	std::string folder;		// folder on the device, for display
-	int64_t size = 0;
-	int64_t taken = 0;		// capture (else modification) time, seconds since the epoch; 0 unknown
+	int64_t size = 0;		// bytes; 0 if the device does not say
+	// Capture (else modification) time, seconds since the epoch; 0 unknown.
+	int64_t taken = 0;
 	bool isVideo = false;
 	bool isRaw = false;
 };
@@ -27,8 +30,12 @@ struct CameraItem {
 enum CameraKind { kCameraPtp, kCameraVolume };
 
 struct CameraInfo {
-	std::string key;		// stable identity: "usb:<vid>:<pid>:<serial>" / "volume:<name>:<size>"
-	std::string name;		// "Canon EOS R6", "iPhone", the volume's name
+	// Stable identity: "usb:<vid>:<pid>:<serial>" (the place on the bus
+	// for a device without a serial number), "volume:<name>:<bytes>".
+	std::string key;
+	// "QEMU filesharing", "iPhone", the volume's name. A PTP source's
+	// Info() has the device's own model name once it was opened.
+	std::string name;
 	CameraKind kind = kCameraPtp;
 };
 

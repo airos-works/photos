@@ -92,9 +92,7 @@ IsDark()
 rgb_color
 Background()
 {
-	if (sDark)
-		return Mix(sDocument, Make(0, 0, 0), 0.0f);
-	return Make(255, 255, 255);
+	return sDark ? sDocument : Make(255, 255, 255);
 }
 
 
@@ -137,64 +135,33 @@ TertiaryText()
 
 
 rgb_color
-GridLine()
+Separator()
 {
-	return sDark ? Mix(Background(), Make(255, 255, 255), 0.10f)
-		: Make(229, 229, 234);
-}
-
-
-rgb_color
-GridLineStrong()
-{
-	return sDark ? Mix(Background(), Make(255, 255, 255), 0.18f)
-		: Make(205, 205, 212);
-}
-
-
-rgb_color
-HalfHourLine()
-{
-	return sDark ? Mix(Background(), Make(255, 255, 255), 0.05f)
-		: Make(242, 242, 245);
-}
-
-
-rgb_color
-Weekend()
-{
-	return sDark ? Mix(Background(), Make(255, 255, 255), 0.03f)
-		: Make(249, 249, 251);
-}
-
-
-rgb_color
-OtherMonth()
-{
-	return sDark ? Mix(Background(), Make(0, 0, 0), 0.25f) : Make(247, 247, 249);
+	return sDark ? Mix(sPanel, Make(255, 255, 255), 0.10f)
+		: Mix(sPanel, Make(0, 0, 0), 0.14f);
 }
 
 
 rgb_color
 Selection()
 {
-	return sDark ? Mix(Background(), Accent(), 0.16f)
-		: Mix(Background(), Accent(), 0.08f);
+	return sDark ? Mix(Sidebar(), Make(255, 255, 255), 0.14f)
+		: Mix(Sidebar(), Make(0, 0, 0), 0.10f);
 }
 
 
 rgb_color
 Hover()
 {
-	return sDark ? Mix(Background(), Make(255, 255, 255), 0.06f)
-		: Make(244, 244, 247);
+	return sDark ? Mix(Sidebar(), Make(255, 255, 255), 0.07f)
+		: Mix(Sidebar(), Make(0, 0, 0), 0.05f);
 }
 
 
 rgb_color
 Accent()
 {
-	return sDark ? Make(255, 85, 75) : Make(232, 62, 52);
+	return sDark ? Make(64, 156, 255) : Make(0, 112, 235);
 }
 
 
@@ -208,102 +175,51 @@ AccentText()
 rgb_color
 Control()
 {
-	return sDark ? Mix(sPanel, Make(255, 255, 255), 0.08f)
-		: Mix(sPanel, Make(0, 0, 0), 0.06f);
+	return sDark ? Mix(sPanel, Make(255, 255, 255), 0.09f)
+		: Mix(sPanel, Make(0, 0, 0), 0.08f);
 }
 
 
 rgb_color
 ControlSelected()
 {
-	return sDark ? Mix(sPanel, Make(255, 255, 255), 0.28f) : Make(255, 255, 255);
+	return sDark ? Mix(sPanel, Make(255, 255, 255), 0.26f) : Make(255, 255, 255);
 }
 
 
 rgb_color
-Separator()
+Placeholder()
 {
-	return sDark ? Mix(sPanel, Make(0, 0, 0), 0.35f)
-		: Mix(sPanel, Make(0, 0, 0), 0.14f);
+	return sDark ? Mix(sDocument, Make(255, 255, 255), 0.08f)
+		: Make(236, 236, 240);
 }
 
 
 rgb_color
-Highlight()
+Viewer()
 {
-	return sHighlight;
+	return sDark ? Mix(sDocument, Make(0, 0, 0), 0.35f) : Make(246, 246, 248);
 }
 
 
 rgb_color
-FromHex(uint32_t color)
+ViewerText()
 {
-	return Make((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff);
+	return Text();
 }
 
 
 rgb_color
-EventFill(uint32_t hex, bool selected)
+Danger()
 {
-	rgb_color color = FromHex(hex);
-	if (selected)
-		return sDark ? Mix(color, Make(0, 0, 0), 0.1f) : color;
-	return sDark ? Mix(Background(), color, 0.32f) : Mix(Background(), color, 0.17f);
+	return sDark ? Make(255, 105, 97) : Make(215, 40, 40);
 }
 
 
 rgb_color
-EventBar(uint32_t hex)
+Favorite()
 {
-	rgb_color color = FromHex(hex);
-	return sDark ? Mix(color, Make(255, 255, 255), 0.1f) : color;
-}
-
-
-rgb_color
-EventText(uint32_t hex, bool selected)
-{
-	rgb_color color = FromHex(hex);
-	if (selected)
-		return Luminance(color) > 0.7f ? Make(20, 20, 20) : Make(255, 255, 255);
-	if (sDark)
-		return Mix(color, Make(255, 255, 255), 0.62f);
-	// Darken until readable on the light fill.
-	rgb_color text = Mix(color, Make(0, 0, 0), 0.45f);
-	return text;
-}
-
-
-rgb_color
-AllDayFill(uint32_t hex, bool selected)
-{
-	rgb_color color = FromHex(hex);
-	if (selected)
-		return sDark ? Mix(color, Make(255, 255, 255), 0.1f)
-			: Mix(color, Make(0, 0, 0), 0.12f);
-	return sDark ? Mix(Background(), color, 0.55f) : Mix(Background(), color, 0.28f);
-}
-
-
-rgb_color
-AllDayText(uint32_t hex, bool selected)
-{
-	if (selected)
-		return Make(255, 255, 255);
-	return EventText(hex, false);
-}
-
-
-rgb_color
-Priority(int priority)
-{
-	switch (priority) {
-		case 4: return sDark ? Make(255, 99, 90) : Make(209, 52, 56);
-		case 3: return sDark ? Make(255, 170, 70) : Make(235, 137, 0);
-		case 2: return sDark ? Make(110, 160, 255) : Make(36, 111, 224);
-		case 1: return SecondaryText();
-		default: return TertiaryText();
-	}
+	return Make(255, 69, 96);
 }
 
 }	// namespace Theme

@@ -2,6 +2,7 @@
 // it works on the same library and settings as the application
 // (PHOTOS_LIBRARY and PHOTOS_SETTINGS_DIR choose others).
 #include "core/Edit.h"
+#include "platform/Editing.h"
 #include "platform/ImageIO.h"
 #include "platform/Session.h"
 
@@ -25,6 +26,8 @@ Usage()
 		"  thumbs                       makes every missing thumbnail\n"
 		"  decode FILE OUT.jpg [EDGE] [preview]   decodes any picture file\n"
 		"  edit ID JSON                 applies an edit (EditParams as JSON)\n"
+		"  rotate ID TURNS              quarter turns, clockwise\n"
+		"  export ID DIRECTORY [original]\n"
 		"  revert ID                    back to the original\n"
 		"  trash ID... | restore ID... | delete ID... | empty-trash\n"
 		"  favorite ID 0|1\n"
@@ -103,56 +106,6 @@ PrintPhoto(Session& session, int64_t id, bool details)
 			(long long)face.id, face.x, face.y, face.width, face.height,
 			face.score, face.quality, who.c_str());
 	}
-}
-
-
-// Renders an edit of the photo's base picture into a version, as the editor
-// does on "Done".
-static bool
-ApplyEdit(Session& session, int64_t id, const EditParams& params, std::string& error)
-{
-	Photo photo;
-	if (!session.Lib().Get(id, photo)) {
-		error = "no such photo";
-		return false;
-	}
-	// An edit of an edit starts from what that edit started from.
-	int64_t base = photo.version;
-	int64_t replace = 0;
-	Version current;
-	if (photo.version != 0 && session.Lib().GetVersion(photo.version, current)
-		&& current.kind == kVersionEdit) {
-		base = current.base;
-		replace = current.id;
-	}
-	Image source, result;
-	if (session.Pics().LoadBase(photo, base, source, 0, &error) != B_OK)
-		return false;
-	RenderEdit(source, params, result);
-	std::string temporary = JoinPath(session.Lib().Directory(),
-		"versions/.render-" + RandomId() + ".jpg");
-	MakeDirs(DirName(temporary));
-	if (!WriteJpeg(result, 93, temporary)) {
-		error = "cannot write the picture";
-		return false;
-	}
-	bool ok;
-	if (replace != 0) {
-		ok = session.Lib().UpdateEditVersion(replace, params.ToJson(), temporary,
-			result.width, result.height);
-	} else {
-		Version version;
-		version.kind = kVersionEdit;
-		version.base = base;
-		version.params = params.ToJson();
-		version.width = result.width;
-		version.height = result.height;
-		ok = session.Lib().AddVersion(id, version, temporary, true) != 0;
-	}
-	RemoveFile(temporary);
-	if (!ok)
-		error = "cannot store the version";
-	return ok;
 }
 
 
@@ -273,11 +226,31 @@ main(int argc, char** argv)
 			fprintf(stderr, "not an edit: %s\n", argv[3]);
 			return 2;
 		}
-		if (!ApplyEdit(session, atoll(argv[2]), params, error)) {
+		if (!SaveEdit(library, session.Pics(), atoll(argv[2]), params, error)) {
 			fprintf(stderr, "%s\n", error.c_str());
 			return 1;
 		}
 		PrintPhoto(session, atoll(argv[2]), true);
+		return 0;
+	}
+
+	if (command == "rotate" && argc > 3) {
+		if (!RotatePhoto(library, session.Pics(), atoll(argv[2]), atoi(argv[3]), error)) {
+			fprintf(stderr, "%s\n", error.c_str());
+			return 1;
+		}
+		PrintPhoto(session, atoll(argv[2]), true);
+		return 0;
+	}
+
+	if (command == "export" && argc > 3) {
+		std::string written;
+		if (!ExportPhoto(library, session.Pics(), atoll(argv[2]), argv[3],
+				argc > 4 && strcmp(argv[4], "original") == 0, written, error)) {
+			fprintf(stderr, "%s\n", error.c_str());
+			return 1;
+		}
+		printf("%s\n", written.c_str());
 		return 0;
 	}
 

@@ -3,6 +3,7 @@
 #include <curl/curl.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 namespace photos {
@@ -14,6 +15,10 @@ struct Buffer {
 	std::map<std::string, std::string> headers;
 	size_t limit = 64 * 1024 * 1024;
 	bool exceeded = false;
+	CURL* curl = nullptr;
+	const HttpRequest* request = nullptr;
+	FILE* file = nullptr;
+	bool failed = false;
 };
 
 
@@ -22,6 +27,26 @@ ReceiveBody(char* data, size_t size, size_t count, void* user)
 {
 	Buffer& buffer = *static_cast<Buffer*>(user);
 	size_t bytes = size * count;
+	long status = 0;
+	curl_easy_getinfo(buffer.curl, CURLINFO_RESPONSE_CODE, &status);
+	if (status >= 200 && status < 300) {
+		if (!buffer.request->downloadPath.empty()) {
+			if (buffer.file == nullptr) {
+				buffer.file = fopen((buffer.request->downloadPath + ".part").c_str(), "wb");
+				if (buffer.file == nullptr) {
+					buffer.failed = true;
+					return 0;
+				}
+			}
+			if (fwrite(data, 1, bytes, buffer.file) != bytes) {
+				buffer.failed = true;
+				return 0;
+			}
+			return bytes;
+		}
+		if (buffer.request->onBody)
+			return buffer.request->onBody(data, bytes) ? bytes : 0;
+	}
 	if (buffer.body.size() + bytes > buffer.limit) {
 		buffer.exceeded = true;
 		return 0;
@@ -124,12 +149,20 @@ CurlHttp::Perform(const HttpRequest& request, const std::atomic<bool>* cancelled
 			headers = curl_slist_append(headers, "Accept: */*");
 
 		Buffer buffer;
+		buffer.curl = curl;
+		buffer.request = &request;
+		curl_mime* mime = nullptr;
 		curl_easy_setopt(curl, CURLOPT_URL, request.url.c_str());
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, "Photos/1.0 (air/OS)");
 		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT, request.timeout);
+		if (request.longTransfer) {
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);
+			curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+			curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 60L);
+		} else
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, request.timeout);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
@@ -157,6 +190,23 @@ CurlHttp::Perform(const HttpRequest& request, const std::atomic<bool>* cancelled
 			curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 		} else if (request.method == "HEAD") {
 			curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+		} else if (!request.multipart.empty()) {
+			mime = curl_mime_init(curl);
+			for (auto& part : request.multipart) {
+				curl_mimepart* mimePart = curl_mime_addpart(mime);
+				curl_mime_name(mimePart, part.name.c_str());
+				if (!part.filePath.empty()) {
+					curl_mime_filedata(mimePart, part.filePath.c_str());
+					if (!part.fileName.empty())
+						curl_mime_filename(mimePart, part.fileName.c_str());
+				} else
+					curl_mime_data(mimePart, part.value.data(), part.value.size());
+				if (!part.contentType.empty())
+					curl_mime_type(mimePart, part.contentType.c_str());
+			}
+			curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+			if (request.method != "POST")
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method.c_str());
 		} else {
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method.c_str());
 			if (!request.body.empty() || request.method == "POST"
@@ -174,8 +224,22 @@ CurlHttp::Perform(const HttpRequest& request, const std::atomic<bool>* cancelled
 
 		CURLcode result = curl_easy_perform(curl);
 		curl_slist_free_all(headers);
+		if (mime != nullptr)
+			curl_mime_free(mime);
 		long status = 0;
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+		if (buffer.file != nullptr) {
+			bool closed = fclose(buffer.file) == 0;
+			std::string part = request.downloadPath + ".part";
+			if (result == CURLE_OK && closed && status >= 200 && status < 300
+				&& rename(part.c_str(), request.downloadPath.c_str()) == 0) {
+				// in place
+			} else {
+				remove(part.c_str());
+				if (result == CURLE_OK)
+					result = CURLE_WRITE_ERROR;
+			}
+		}
 		char* effective = nullptr;
 		curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective);
 		response = HttpResponse();
@@ -186,6 +250,8 @@ CurlHttp::Perform(const HttpRequest& request, const std::atomic<bool>* cancelled
 				response.error = "cancelled";
 			else if (buffer.exceeded)
 				response.error = "the reply was too large";
+			else if (buffer.failed)
+				response.error = "cannot write " + request.downloadPath;
 			else
 				response.error = curl_easy_strerror(result);
 			return response;

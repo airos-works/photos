@@ -3,12 +3,23 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace photos {
+
+// One part of a multipart/form-data body: a value, or a file sent from disk.
+struct HttpPart {
+	std::string name;
+	std::string value;
+	std::string filePath;		// when set: the file's content is the part
+	std::string fileName;
+	std::string contentType;
+};
 
 struct HttpRequest {
 	std::string method = "GET";
@@ -21,6 +32,17 @@ struct HttpRequest {
 	std::string password;
 	bool followRedirects = false;
 	long timeout = 60;		// seconds
+	// A transfer of unknown length (a picture, a sync stream): no overall
+	// limit, but it fails when nothing moves for a minute.
+	bool longTransfer = false;
+	// A multipart/form-data body instead of `body`.
+	std::vector<HttpPart> multipart;
+	// The reply's body goes to this file (written next to it and renamed when
+	// the status is 2xx) instead of HttpResponse::body.
+	std::string downloadPath;
+	// The reply's body is handed over as it arrives (2xx only; other replies
+	// fill HttpResponse::body). Returning false stops the transfer.
+	std::function<bool(const char* data, size_t size)> onBody;
 };
 
 struct HttpResponse {

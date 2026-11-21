@@ -109,7 +109,7 @@ check: $(BUILD)/photos_tests
 HOST_FLAGS = -O1 -g -fsanitize=address,undefined
 check-host:
 	bash tools/host-deps.sh
-	$(MAKE) BUILD=build-host CXX=g++ CXXFLAGS="$(HOST_FLAGS)" \
+	$(MAKE) -j8 BUILD=build-host CXX=g++ CXXFLAGS="$(HOST_FLAGS)" \
 		APP_CPPFLAGS="-Ibuild-host/.deps/include" \
 		SQLITE_LIBS="build-host/.deps/lib/libsqlite3.so" \
 		CORE_LIBS="build-host/.deps/lib/libsqlite3.so -lpthread -fsanitize=address,undefined" check
@@ -121,7 +121,7 @@ $(BUILD)/photos_integration: $(call obj,$(INTEGRATION_SRC)) $(CORE_OBJ)
 
 integration-host:
 	bash tools/host-deps.sh
-	$(MAKE) BUILD=build-host CXX=g++ CXXFLAGS="$(HOST_FLAGS)" \
+	$(MAKE) -j8 BUILD=build-host CXX=g++ CXXFLAGS="$(HOST_FLAGS)" \
 		APP_CPPFLAGS="-Ibuild-host/.deps/include" \
 		CORE_LIBS="build-host/.deps/lib/libsqlite3.so -lpthread -fsanitize=address,undefined" \
 		build-host/photos_integration

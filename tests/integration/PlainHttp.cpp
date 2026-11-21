@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 namespace photos {
@@ -44,6 +45,36 @@ PerformOnce(const HttpRequest& request)
 		return response;
 	}
 	freeaddrinfo(result);
+	// A multipart body is built in memory (tests send small files).
+	HttpRequest built = request;
+	if (!request.multipart.empty()) {
+		std::string boundary = "----photos-test-boundary-7d3f9a";
+		for (auto& part : request.multipart) {
+			built.body += "--" + boundary + "\r\nContent-Disposition: form-data; name=\""
+				+ part.name + "\"";
+			std::string value = part.value;
+			if (!part.filePath.empty()) {
+				built.body += "; filename=\"" + (part.fileName.empty()
+					? std::string("file") : part.fileName) + "\"";
+				FILE* file = fopen(part.filePath.c_str(), "rb");
+				value.clear();
+				if (file != nullptr) {
+					char chunk[65536];
+					size_t got;
+					while ((got = fread(chunk, 1, sizeof(chunk), file)) > 0)
+						value.append(chunk, got);
+					fclose(file);
+				}
+			}
+			built.body += "\r\n";
+			if (!part.contentType.empty())
+				built.body += "Content-Type: " + part.contentType + "\r\n";
+			built.body += "\r\n" + value + "\r\n";
+		}
+		built.body += "--" + boundary + "--\r\n";
+		built.contentType = "multipart/form-data; boundary=" + boundary;
+	}
+	const HttpRequest& request_ = built;
 	std::string head = request.method + " " + path + " HTTP/1.1\r\nHost: " + hostPort
 		+ "\r\nConnection: close\r\nUser-Agent: Photos-tests\r\n";
 	if (!request.bearer.empty())
@@ -51,15 +82,15 @@ PerformOnce(const HttpRequest& request)
 	else if (!request.user.empty())
 		head += "Authorization: Basic " + Base64Encode(request.user + ":"
 			+ request.password) + "\r\n";
-	if (!request.contentType.empty())
-		head += "Content-Type: " + request.contentType + "\r\n";
+	if (!request_.contentType.empty())
+		head += "Content-Type: " + request_.contentType + "\r\n";
 	for (auto& header : request.headers)
 		head += header.first + ": " + header.second + "\r\n";
-	if (!request.body.empty() || request.method == "POST" || request.method == "PUT"
+	if (!request_.body.empty() || request.method == "POST" || request.method == "PUT"
 		|| request.method == "PATCH")
-		head += "Content-Length: " + std::to_string(request.body.size()) + "\r\n";
+		head += "Content-Length: " + std::to_string(request_.body.size()) + "\r\n";
 	head += "\r\n";
-	std::string data = head + request.body;
+	std::string data = head + request_.body;
 	size_t sent = 0;
 	while (sent < data.size()) {
 		ssize_t n = send(fd, data.data() + sent, data.size() - sent, 0);
@@ -111,8 +142,22 @@ PerformOnce(const HttpRequest& request)
 		}
 		body = decoded;
 	}
-	response.body = body;
 	response.url = request.url;
+	if (response.Ok() && !request.downloadPath.empty()) {
+		FILE* file = fopen(request.downloadPath.c_str(), "wb");
+		if (file == nullptr || fwrite(body.data(), 1, body.size(), file) != body.size())
+			response.error = "cannot write " + request.downloadPath;
+		if (file != nullptr)
+			fclose(file);
+		if (!response.error.empty())
+			response.status = 0;
+		return response;
+	}
+	if (response.Ok() && request.onBody) {
+		request.onBody(body.data(), body.size());
+		return response;
+	}
+	response.body = body;
 	return response;
 }
 

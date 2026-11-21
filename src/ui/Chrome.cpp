@@ -175,7 +175,9 @@ SidebarView::Draw(BRect updateRect)
 			BPoint(sync.right - S(12), sync.top));
 		// A dot for the state.
 		rgb_color dot = fSyncError ? Theme::Danger()
-			: fSyncBusy ? Theme::Accent() : rgb_color{60, 190, 110, 255};
+			: fSyncBusy ? Theme::Accent()
+			: fSyncText.StartsWith("Not connected") ? Theme::TertiaryText()
+			: rgb_color{60, 190, 110, 255};
 		SetHighColor(dot);
 		float middle = sync.top + S(18);
 		FillEllipse(BPoint(sync.left + S(21), middle), S(4), S(4));

@@ -7,21 +7,14 @@ resource app_version {
 	long_info = "Photos for air/OS: your library by time and by people, basic edits, cameras and phones, Immich."
 };
 // Listed as supported (Open with, drops), never as the preferred application:
-// ShowImage stays the viewer of single files.
+// ShowImage stays the viewer of single files. Only types the system's MIME
+// database has: a type it lacks would put a stub into the package's mime_db,
+// the same file other packages ship (LightCraft's image/x-adobe-dng). RAW and
+// HEIC files are imported by drop, File > Import and from cameras.
 resource file_types message {
 	"types" = "image/jpeg",
 	"types" = "image/png",
 	"types" = "image/tiff",
 	"types" = "image/webp",
-	"types" = "image/heic",
-	"types" = "image/avif",
-	"types" = "image/x-adobe-dng",
-	"types" = "image/x-canon-cr2",
-	"types" = "image/x-canon-cr3",
-	"types" = "image/x-nikon-nef",
-	"types" = "image/x-sony-arw",
-	"types" = "image/x-fuji-raf",
-	"types" = "image/x-panasonic-rw2",
-	"types" = "image/x-olympus-orf",
-	"types" = "image/x-pentax-pef"
+	"types" = "image/avif"
 };

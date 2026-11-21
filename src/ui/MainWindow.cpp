@@ -172,6 +172,7 @@ MainWindow::MainWindow(Session& session)
 	fTicker = new BMessageRunner(BMessenger(this), &tick, 1500000);
 
 	_ShowView(kItemPhotos, 0, true);
+	_RebuildSidebar();
 	fGrid->MakeFocus(true);
 #ifdef PHOTOS_HAVE_CAMERAS
 	fCameras->Start();
@@ -511,7 +512,7 @@ MainWindow::_RebuildSidebar()
 
 	SyncState sync = fSession.GetSyncState();
 	if (!sync.configured)
-		fSidebar->SetSync("Immich", "Not set up · click to sync later", false, false);
+		fSidebar->SetSync("Immich", "Not connected · click to set up", false, false);
 	else if (!sync.error.empty() && !sync.running)
 		fSidebar->SetSync("Immich", sync.error.c_str(), false, true);
 	else {

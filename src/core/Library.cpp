@@ -598,10 +598,21 @@ Library::ImportFile(const std::string& path, const ImportOptions& options)
 	}
 	// What the server keeps is taken as it is; anything else has to be what
 	// its name says.
-	if (options.immichId.empty() && !LooksLikePicture(path, kind)) {
-		result.error = "the file is damaged or not a picture";
+	// A file that is not a picture is not offered again as new by the
+	// camera it sits on.
+	auto reject = [&](const char* why) {
+		result.error = why;
+		if (!options.itemKey.empty()) {
+			std::lock_guard<std::recursive_mutex> lock(fLock);
+			Statement statement = fDb.Prepare(
+				"INSERT OR IGNORE INTO imported_items(key) VALUES(?1)");
+			statement.Bind(1, options.itemKey);
+			statement.Run();
+		}
 		return result;
-	}
+	};
+	if (options.immichId.empty() && !LooksLikePicture(path, kind))
+		return reject("the file is damaged or not a picture");
 	std::string sha1 = Sha1OfFile(path);
 	if (sha1.empty()) {
 		result.error = "cannot read the file";
@@ -650,9 +661,8 @@ Library::ImportFile(const std::string& path, const ImportOptions& options)
 	bool readable = _FillMetadata(path, kind, metadata);
 	if (!readable && options.immichId.empty() && !found
 		&& (kind == kKindRaw || kind == kKindHeic)) {
-		result.error = kind == kKindRaw ? "not a RAW file Photos can read"
-			: "not a HEIF picture Photos can read";
-		return result;
+		return reject(kind == kKindRaw ? "not a RAW file Photos can read"
+			: "not a HEIF picture Photos can read");
 	}
 	int64_t taken = metadata.taken;
 	if (taken == 0 && found)

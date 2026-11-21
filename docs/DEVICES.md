@@ -143,16 +143,17 @@ and runs `ptpls` and the agent against them:
   read; 20 pictures and videos listed (27 objects walked); EXIF thumbnails
   for 14; all 20 downloaded and identical (SHA-1) to the host's files,
   among them one of 23.8 MiB, names with spaces, and four whose data ends
-  exactly on a packet boundary; about 40 MiB/s. A download cancelled after
+  exactly on a packet boundary; 40 to 110 MiB/s. A download cancelled after
   4 MB returns in half a second and the device lists again. Deleting from
   the read-only device fails with "write-protected".
 - **More than 4 GiB**: an object of 4,295,090,753 bytes (a sparse file)
   listed with its size and downloaded with the right SHA-1; a folder of
   3000 files listed in 5.6 s (1.8 ms per object).
-- **Unplugged during downloads** (`unplug-test.sh`): the download that was
-  cut off returns "was disconnected" (`B_DEV_NOT_READY`), its partial file
-  is removed, the files before it are intact. See the first known limit
-  below for what the system does not do.
+- **Unplugged during downloads** (`unplug-test.sh`, 16 unplugs at random
+  moments of a download): every time the download that was cut off returned
+  "was disconnected" (`B_DEV_NOT_READY`) within a second or two, its
+  partial file was removed and the files before it were intact. Once the
+  program's team did not end afterwards: the first known limit below.
 - **Memory card**: reported when mounted, listed (dates from the files'
   times), thumbnails, all copies identical; removal reported. Deleting on a
   card mounted read/write works.
@@ -197,7 +198,8 @@ image. In particular untested on hardware:
   between (several milliseconds: the hook waits for the controller) is
   queued and never completed, and the thread that waits for it cannot even
   be killed. A download is a row of transfers with gaps, so pulling the
-  cable during one hits this often (in the test: about one time in three).
+  cable during one can hit this (in the tests: 1 of 16 unplugs with this
+  code, 3 of 20 over all runs).
   The transport notices within a second that the device is gone, gives the
   thread up and reports "was disconnected"; Photos goes on working. But
   the team keeps that thread: when the program quits, its team stays behind

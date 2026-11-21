@@ -227,7 +227,9 @@ bool
 App::QuitRequested()
 {
 	if (fWindow != nullptr && fWindow->Lock()) {
-		// The window saves its state when it quits.
+		// Quit from the menu, the Deskbar or a script: the window is not
+		// asked, so its state is kept here.
+		fWindow->SaveState();
 		fWindow->Quit();
 		fWindow = nullptr;
 	}

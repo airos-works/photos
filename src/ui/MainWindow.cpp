@@ -1266,7 +1266,7 @@ MainWindow::_AnswerTestQuery(BMessage* message)
 
 
 void
-MainWindow::_SaveState()
+MainWindow::SaveState()
 {
 	Settings& prefs = fSession.Prefs();
 	BRect frame = Frame();
@@ -1284,7 +1284,7 @@ MainWindow::_SaveState()
 bool
 MainWindow::QuitRequested()
 {
-	_SaveState();
+	SaveState();
 	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }

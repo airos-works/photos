@@ -39,6 +39,8 @@ public:
 	void ImportRefs(BMessage* message);
 	// A camera, phone or card arrived (from the watcher or photos_agent).
 	void CameraArrived(const char* key);
+	// Keeps where the window is and what it shows for the next start.
+	void SaveState();
 
 private:
 	enum Card { kCardGrid = 0, kCardViewer, kCardPeople, kCardImport };
@@ -70,7 +72,6 @@ private:
 	void _LibraryChanged(BMessage* message);
 	void _Alert(const char* title, const char* text);
 	void _AnswerTestQuery(BMessage* message);
-	void _SaveState();
 #ifdef PHOTOS_HAVE_CAMERAS
 	void _OpenCamera(const char* key);
 #endif

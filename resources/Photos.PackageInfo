@@ -1,5 +1,5 @@
 name photos
-version 1.0.0-1
+version 1.0.0-2
 architecture x86_64
 summary "Your photo library: timeline, people, edits, cameras and Immich"
 description "Photos keeps your pictures in one library and shows them by time: recent photos, days, months and years. It finds the faces in them with the Neural Kit and learns who is who as you name people. Basic edits (crop, rotate, straighten, exposure, contrast, colour) never touch the original, and a photo opens in PhotoCraft for bigger changes: every save there becomes a new version in Photos. JPEG, PNG, HEIC and camera RAW files (developed with LightCraft's engine) are supported. Connect a camera, a phone or a memory card and Photos opens to import everything or only what is new, and it keeps the library in sync with an Immich server in both directions."

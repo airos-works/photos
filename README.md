@@ -14,7 +14,7 @@ back as versions.
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `eddc49d` on 2026-11-21 ([all files](https://github.com/airos-works/photos/releases/tag/latest)).
+Built automatically by air/OS CI from commit `3b002c1` on 2026-11-21 ([all files](https://github.com/airos-works/photos/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|

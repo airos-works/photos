@@ -86,6 +86,13 @@ $(BUILD)/photos_tool: $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) $(NET_OBJ) \
 	$(CXX) $(APP_LDFLAGS) -o $@ $(TOOL_OBJ) $(PLATFORM_OBJ) $(CORE_OBJ) \
 		$(NET_OBJ) $(RAW_LINK) $(LIBS)
 
+# rawtest: the RAW library from a shell (tools/raw-test), linked the way
+# Photos links it. Needs $(RAW_LIB) (tools/build-raw.sh).
+$(BUILD)/rawtest: tools/raw-test/rawtest.cpp raw/include/photos_raw.h $(RAW_LIB)
+	mkdir -p $(BUILD)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(APP_LDFLAGS) -o $@ tools/raw-test/rawtest.cpp \
+		$(RAW_LIB) $(RAW_NATIVE_LIBS)
+
 HAIKU_DIRS = src/ui src/platform src/agent src/tool
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp

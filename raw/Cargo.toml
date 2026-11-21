@@ -1,0 +1,59 @@
+[package]
+name = "photos-raw"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "LightCraft's RAW (and HEIF) decoding and default rendering behind a C interface, for Photos"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+# LightCraft's crates at one pinned commit of the air/OS fork (MIT OR
+# Apache-2.0). Every `rev` below is the same commit: change them together
+# (and LIGHTCRAFT_REV in src/lib.rs follows from build.rs).
+[dependencies]
+lightcraft-engine = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8", default-features = false }
+lightcraft-pipeline = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-develop = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-raw = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-meta = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-codecs = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-raster = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+lightcraft-geom = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+rayon = "1"
+# (the version LightCraft encodes its own JPEGs with)
+jpeg-encoder = { version = "0.7", default-features = false, features = ["std"] }
+
+[features]
+default = ["heif"]
+# HEIF / HEIC through LightCraft's pure-Rust decoder (lightcraft-heif, heic-rs).
+# LightCraft's own releases leave it out: HEVC patents are a distributor's
+# call. Build without it with PHOTOS_RAW_FEATURES="" tools/build-raw.sh.
+heif = ["lightcraft-codecs/heif"]
+
+# LightCraft's workspace builds wgpu from its vendored copy, which has the
+# Haiku cfg changes (lightcraft/vendor/README.md). Patches are not inherited
+# from a dependency's workspace, so they are repeated here. (Photos never
+# calls into wgpu: lightcraft-engine links lightcraft-gpu, and the final
+# link drops what is not referenced.)
+[patch.crates-io]
+wgpu = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+wgpu-core = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/airos-works/lightcraft", rev = "8fb1f41f96558761cc9217f63f76c29e405f9cc8" }
+
+[profile.release]
+opt-level = 3
+debug = false
+# Panics unwind to the C interface, which turns them into an error code.
+panic = "unwind"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+
+[dev-dependencies]
+serde_json = "1"

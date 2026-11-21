@@ -147,4 +147,5 @@ clean:
 	rm -rf build-haiku build-host build-x86_64 build-arm64
 
 -include $(CORE_OBJ:.o=.d) $(NET_OBJ:.o=.d) $(PLATFORM_OBJ:.o=.d) \
-	$(UI_OBJ:.o=.d) $(AGENT_OBJ:.o=.d) $(TOOL_OBJ:.o=.d) $(TEST_OBJ:.o=.d)
+	$(UI_OBJ:.o=.d) $(AGENT_OBJ:.o=.d) $(TOOL_OBJ:.o=.d) $(TEST_OBJ:.o=.d) \
+	$(wildcard $(BUILD)/tools/ptp-test/*.d)

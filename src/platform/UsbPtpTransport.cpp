@@ -442,10 +442,12 @@ UsbPtpTransport::_StopWorker(bool kill)
 	status_t status;
 	do {
 		status = wait_for_thread_etc(worker->thread, B_RELATIVE_TIMEOUT,
-			3000000, &result);
+			fGone ? 1000000 : 3000000, &result);
 	} while (status == B_INTERRUPTED);
 	if (status == B_TIMED_OUT || status == B_WOULD_BLOCK) {
-		// It does not come back: the kernel keeps it. It goes on using the
+		// It does not come back: the kernel keeps it (usb_raw waits for a
+		// transfer that was queued while the device was being removed and
+		// that nothing completes; docs/DEVICES.md). It goes on using the
 		// device object and its buffer, so they stay; nothing more can be
 		// done with this device.
 		Trace("the transfer thread is stuck\n");
@@ -470,12 +472,22 @@ UsbPtpTransport::_Run(int timeoutMs, ssize_t* result)
 	atomic_set(&worker->finished, 0);
 	release_sem(worker->request);
 
+	// Waits in pieces, to notice early when the device is unplugged: the
+	// transfer of a device that went away is cancelled by the system, as a
+	// rule, but one that was queued while the system was taking the device
+	// away is not, and would take the whole timeout.
 	status_t status;
 	bigtime_t end = system_time()
 		+ (bigtime_t)(timeoutMs > 0 ? timeoutMs : 1) * 1000;
-	do {
-		status = acquire_sem_etc(worker->done, 1, B_ABSOLUTE_TIMEOUT, end);
-	} while (status == B_INTERRUPTED);
+	while (true) {
+		bigtime_t piece = std::min(end, system_time() + 1000000);
+		do {
+			status = acquire_sem_etc(worker->done, 1, B_ABSOLUTE_TIMEOUT,
+				piece);
+		} while (status == B_INTERRUPTED);
+		if (status == B_OK || piece >= end || IsGone())
+			break;
+	}
 	if (status != B_OK) {
 		// What a transfer that came back at this very moment brought is
 		// lost with the thread: the session treats a timeout as the end of

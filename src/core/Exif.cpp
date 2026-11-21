@@ -152,8 +152,12 @@ ParseExif(const uint8_t* data, size_t size, Metadata& metadata)
 
 	uint32_t exifIfd = 0, gpsIfd = 0;
 	std::string dateTime, original, digitized, offsetOriginal, offset;
+	int tiffWidth = 0, tiffHeight = 0;
 	tiff.Directory(ifd0, [&](const Tiff::Entry& entry) {
 		switch (entry.tag) {
+			// A TIFF picture's own size (an EXIF block in a JPEG has none).
+			case 0x0100: tiffWidth = (int)tiff.Number(entry); break;
+			case 0x0101: tiffHeight = (int)tiff.Number(entry); break;
 			case 0x010f: metadata.make = tiff.Text(entry); break;
 			case 0x0110: metadata.model = tiff.Text(entry); break;
 			case 0x0112:
@@ -184,6 +188,11 @@ ParseExif(const uint8_t* data, size_t size, Metadata& metadata)
 			case 0xa434: metadata.lens = tiff.Text(entry); break;
 		}
 	});
+	if (metadata.width == 0 && tiffWidth > 0 && tiffHeight > 0
+		&& tiffWidth < 100000 && tiffHeight < 100000) {
+		metadata.width = tiffWidth;
+		metadata.height = tiffHeight;
+	}
 	if (metadata.width == 0 && pixelWidth > 0 && pixelHeight > 0) {
 		metadata.width = pixelWidth;
 		metadata.height = pixelHeight;
@@ -350,6 +359,41 @@ ReadImageSize(const std::string& path, int& width, int& height)
 			height = (int)(bits >> 14 & 0x3fff) + 1;
 			return true;
 		}
+	}
+	return false;
+}
+
+
+bool
+LooksLikePicture(const std::string& path, int kind)
+{
+	FILE* file = fopen(path.c_str(), "rb");
+	if (file == nullptr)
+		return false;
+	uint8_t head[32] = {};
+	size_t got = fread(head, 1, sizeof(head), file);
+	fclose(file);
+	auto begins = [&](const char* text, size_t length, size_t at = 0) {
+		return got >= at + length && memcmp(head + at, text, length) == 0;
+	};
+	bool jpeg = got >= 3 && head[0] == 0xff && head[1] == 0xd8 && head[2] == 0xff;
+	bool png = begins("\x89PNG\r\n\x1a\n", 8);
+	bool isoMedia = begins("ftyp", 4, 4);
+	switch (kind) {
+		case kKindJpeg:
+			return jpeg;
+		case kKindPng:
+			return png;
+		case kKindHeic:
+			return isoMedia;
+		case kKindRaw:
+			return got >= 16;
+		case kKindOther:
+			return jpeg || png || isoMedia || begins("GIF8", 4) || begins("BM", 2)
+				|| begins("II*\0", 4) || begins("MM\0*", 4) || begins("8BPS", 4)
+				|| (begins("RIFF", 4) && begins("WEBP", 4, 8))
+				|| begins("\0\0\0\x0cjP  ", 8) || begins("\xff\x0a", 2)
+				|| begins("\0\0\0\x0cJXL ", 8);
 	}
 	return false;
 }

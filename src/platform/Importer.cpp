@@ -233,20 +233,8 @@ Importer::_RunCamera(Job& job)
 	}
 	std::string incoming = JoinPath(fLibrary.Directory(), "originals/.incoming");
 	MakeDirs(incoming);
-	// The source is closed between uses (a camera shows "connected to a
-	// computer" while a session is open).
-	std::string openError;
-	status_t opened = job.camera->Open(&openError);
-	if (opened != B_OK) {
-		std::lock_guard<std::mutex> lock(fLock);
-		fStatus.done += (int)job.items.size();
-		fStatus.failed += (int)job.items.size();
-		if (fStatus.error.empty()) {
-			fStatus.error = openError.empty() ? std::string(strerror(opened))
-				: openError;
-		}
-		return;
-	}
+	// The source stays as the import view opened it: a device's handles for
+	// its pictures hold for one session only.
 	for (auto& item : job.items) {
 		if (_Cancelled())
 			break;
@@ -292,7 +280,6 @@ Importer::_RunCamera(Job& job)
 		if (result.id != 0 && job.deleteAfterwards)
 			job.camera->DeleteItem(item);
 	}
-	job.camera->Close();
 #else
 	(void)job;
 #endif

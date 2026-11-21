@@ -337,7 +337,7 @@ private:
 	void _DeleteFiles(const Photo& photo);
 	std::string _StoreOriginal(const std::string& source, const std::string& name,
 		int64_t taken, bool move);
-	void _FillMetadata(const std::string& path, MediaKind kind, Metadata& metadata);
+	bool _FillMetadata(const std::string& path, MediaKind kind, Metadata& metadata);
 
 	Database fDb;
 	std::string fDirectory;

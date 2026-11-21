@@ -39,6 +39,11 @@ bool ParseJpegMetadata(const uint8_t* data, size_t size, Metadata& metadata);
 // The pixel size of a PNG, GIF, BMP or WebP file from its header.
 bool ReadImageSize(const std::string& path, int& width, int& height);
 
+// Whether a file begins like a picture of the kind its name says (a JPEG's
+// marker, a PNG's signature, ...). RAW files have too many beginnings to
+// tell here: they pass.
+bool LooksLikePicture(const std::string& path, int kind);
+
 // "1/250 s", "f/2.8", "ISO 400", "35 mm": for the info panel.
 std::string FormatExposure(double seconds);
 std::string FormatAperture(double fNumber);

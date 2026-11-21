@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include <csetjmp>
+#include <map>
+#include <mutex>
 #include <cstdio>
 #include <cstring>
 
@@ -133,11 +135,104 @@ DecodeWebP(const uint8_t* data, size_t size, Image& image)
 }
 
 
-status_t
-DecodeWithTranslator(BPositionIO& stream, Image& image)
+// The MIME type of what the bytes begin, for the formats the Translation
+// Kit is asked to decode; null for anything else. The roster is not asked
+// to identify files: that hands them to every translator, and a damaged or
+// mislabelled file has crashed one (the RAW translator) inside this
+// program.
+const char*
+SniffFormat(const uint8_t* data, size_t size)
 {
-	BBitmap* bitmap = BTranslationUtils::GetBitmap(&stream);
-	if (bitmap == nullptr)
+	if (size >= 8 && memcmp(data, "\x89PNG\r\n\x1a\n", 8) == 0)
+		return "image/png";
+	if (size >= 6 && (memcmp(data, "GIF87a", 6) == 0 || memcmp(data, "GIF89a", 6) == 0))
+		return "image/gif";
+	if (size >= 4 && (memcmp(data, "II*\0", 4) == 0 || memcmp(data, "MM\0*", 4) == 0))
+		return "image/tiff";
+	if (size >= 2 && data[0] == 'B' && data[1] == 'M')
+		return "image/bmp";
+	if (size >= 4 && memcmp(data, "8BPS", 4) == 0)
+		return "image/vnd.adobe.photoshop";
+	if (size >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff)
+		return "image/jpeg";
+	if (size >= 12 && memcmp(data, "\0\0\0\x0cjP  ", 8) == 0)
+		return "image/jp2";
+	if (size >= 12 && memcmp(data + 4, "ftyp", 4) == 0) {
+		if (memcmp(data + 8, "avif", 4) == 0 || memcmp(data + 8, "avis", 4) == 0)
+			return "image/avif";
+	}
+	return nullptr;
+}
+
+
+// The translator that reads a format, found once.
+bool
+TranslatorFor(const char* mime, translator_id& id)
+{
+	static std::mutex lock;
+	static std::map<std::string, translator_id> known;
+	static bool listed = false;
+	std::lock_guard<std::mutex> guard(lock);
+	BTranslatorRoster* roster = BTranslatorRoster::Default();
+	if (roster == nullptr)
+		return false;
+	if (!listed) {
+		listed = true;
+		translator_id* ids = nullptr;
+		int32 count = 0;
+		if (roster->GetAllTranslators(&ids, &count) == B_OK) {
+			for (int32 i = 0; i < count; i++) {
+				const translation_format* formats = nullptr;
+				int32 formatCount = 0;
+				if (roster->GetInputFormats(ids[i], &formats, &formatCount) != B_OK)
+					continue;
+				for (int32 j = 0; j < formatCount; j++) {
+					std::string type = formats[j].MIME;
+					// The bitmap format itself is every translator's.
+					if (formats[j].type == B_TRANSLATOR_BITMAP || type.empty())
+						continue;
+					if (known.find(type) == known.end())
+						known[type] = ids[i];
+				}
+			}
+			delete[] ids;
+		}
+		// Names the same format goes by.
+		static const char* const kAliases[][2] = {
+			{"image/bmp", "image/x-bmp"}, {"image/bmp", "image/x-ms-bmp"},
+			{"image/vnd.adobe.photoshop", "image/x-photoshop"},
+			{"image/jp2", "image/jpeg2000"}, {"image/tiff", "image/x-tiff"}
+		};
+		for (auto& alias : kAliases) {
+			auto found = known.find(alias[1]);
+			if (known.find(alias[0]) == known.end() && found != known.end())
+				known[alias[0]] = found->second;
+		}
+	}
+	auto found = known.find(mime);
+	if (found == known.end())
+		return false;
+	id = found->second;
+	return true;
+}
+
+
+status_t
+DecodeWithTranslator(BPositionIO& stream, const uint8_t* head, size_t headSize,
+	Image& image)
+{
+	const char* mime = SniffFormat(head, headSize);
+	translator_id translator;
+	if (mime == nullptr || !TranslatorFor(mime, translator))
+		return B_NO_TRANSLATOR;
+	BBitmapStream output;
+	stream.Seek(0, SEEK_SET);
+	status_t status = BTranslatorRoster::Default()->Translate(translator, &stream,
+		nullptr, &output, B_TRANSLATOR_BITMAP);
+	if (status != B_OK)
+		return status;
+	BBitmap* bitmap = nullptr;
+	if (output.DetachBitmap(&bitmap) != B_OK || bitmap == nullptr)
 		return B_NO_TRANSLATOR;
 	bool ok = ImageFromBitmap(bitmap, image);
 	delete bitmap;
@@ -235,7 +330,7 @@ DecodeRaw(const std::string& path, Image& image, int maxEdge, uint32 flags,
 		if (error != nullptr)
 			*error = message[0] != '\0' ? message : "cannot develop this RAW file";
 		// A camera the engine does not know: its preview, whatever its
-		// size, then the system's RAW translator.
+		// size.
 		photos_raw_image preview;
 		memset(&preview, 0, sizeof(preview));
 		if (photos_raw_preview_image_file(path.c_str(),
@@ -244,23 +339,18 @@ DecodeRaw(const std::string& path, Image& image, int maxEdge, uint32 flags,
 			TakeRawImage(preview, image);
 			return B_OK;
 		}
-		BFile file(path.c_str(), B_READ_ONLY);
-		if (file.InitCheck() == B_OK && DecodeWithTranslator(file, image) == B_OK)
-			return B_OK;
 		return B_NOT_SUPPORTED;
 	}
 	TakeRawImage(raw, image);
 	return B_OK;
 #else
+	(void)path;
+	(void)image;
 	(void)maxEdge;
 	(void)flags;
-	BFile file(path.c_str(), B_READ_ONLY);
-	if (file.InitCheck() != B_OK)
-		return file.InitCheck();
-	status_t status = DecodeWithTranslator(file, image);
-	if (status != B_OK && error != nullptr)
+	if (error != nullptr)
 		*error = "RAW files are not supported in this build";
-	return status;
+	return B_NOT_SUPPORTED;
 #endif
 }
 
@@ -301,7 +391,7 @@ DecodeMemory(const void* data, size_t size, Image& image, int maxEdge, uint32 fl
 		status = DecodeWebP(bytes, size, image);
 	if (status != B_OK) {
 		BMemoryIO stream(data, size);
-		status = DecodeWithTranslator(stream, image);
+		status = DecodeWithTranslator(stream, bytes, size, image);
 	}
 	if (status == B_OK)
 		Finish(image, maxEdge, flags);
@@ -416,35 +506,6 @@ ReadFileMetadata(const std::string& path, MediaKind kind, Metadata& metadata)
 		&& (memcmp(head.data(), "II*\0", 4) == 0 || memcmp(head.data(), "MM\0*", 4) == 0)) {
 		ParseExif((const uint8_t*)head.data(), head.size(), metadata);
 	}
-	if (metadata.width == 0) {
-		// Ask the translators for the size.
-		BFile file(path.c_str(), B_READ_ONLY);
-		BTranslatorRoster* roster = BTranslatorRoster::Default();
-		translator_info info;
-		if (file.InitCheck() == B_OK && roster != nullptr
-			&& roster->Identify(&file, nullptr, &info) == B_OK) {
-			BMallocIO header;
-			file.Seek(0, SEEK_SET);
-			BMessage settings;
-			settings.AddBool(B_TRANSLATOR_EXT_HEADER_ONLY, true);
-			if (roster->Translate(&file, &info, &settings, &header,
-					B_TRANSLATOR_BITMAP) == B_OK
-				&& header.BufferLength() >= sizeof(TranslatorBitmap)) {
-				TranslatorBitmap bitmap;
-				memcpy(&bitmap, header.Buffer(), sizeof(bitmap));
-				BRect bounds;
-				bounds.left = B_BENDIAN_TO_HOST_FLOAT(bitmap.bounds.left);
-				bounds.top = B_BENDIAN_TO_HOST_FLOAT(bitmap.bounds.top);
-				bounds.right = B_BENDIAN_TO_HOST_FLOAT(bitmap.bounds.right);
-				bounds.bottom = B_BENDIAN_TO_HOST_FLOAT(bitmap.bounds.bottom);
-				if (bounds.IsValid() && bounds.Width() < 100000
-					&& bounds.Height() < 100000) {
-					metadata.width = bounds.IntegerWidth() + 1;
-					metadata.height = bounds.IntegerHeight() + 1;
-				}
-			}
-		}
-	}
 	return metadata.width > 0 || metadata.taken != 0;
 }
 
@@ -516,8 +577,11 @@ WritePng(const Image& image, const std::string& path)
 		BBitmapStream stream(bitmap);	// owns the bitmap
 		BFile file(temporary.c_str(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 		BTranslatorRoster* roster = BTranslatorRoster::Default();
+		translator_id translator;
 		ok = file.InitCheck() == B_OK && roster != nullptr
-			&& roster->Translate(&stream, nullptr, nullptr, &file, B_PNG_FORMAT) == B_OK;
+			&& TranslatorFor("image/png", translator)
+			&& roster->Translate(translator, &stream, nullptr, &file,
+				B_PNG_FORMAT) == B_OK;
 	}
 	if (ok)
 		ok = rename(temporary.c_str(), path.c_str()) == 0;

@@ -386,7 +386,7 @@ ImportView::ImportFinished()
 	// What was imported is not new any more.
 	for (auto& entry : fEntries) {
 		entry.selected = false;
-		entry.isNew = !fSession.Lib().WasImported(
+		entry.isNew = entry.importable && !fSession.Lib().WasImported(
 			CameraItemKey(entry.name, entry.size, entry.taken), entry.name, entry.size);
 	}
 	fCanvas->Invalidate();
@@ -485,9 +485,8 @@ ImportView::_Run()
 		if (fStop || window.SendMessage(&thumb) != B_OK)
 			delete bitmap;
 	}
-	// Done with the device for now (an import opens it again).
-	if (!fStop)
-		camera->Close();
+	// The session stays open while the device's pictures are shown: its
+	// handles for them are only good for this session.
 }
 
 

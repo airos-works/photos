@@ -525,10 +525,13 @@ Library::WasImported(const std::string& itemKey, const std::string& name, int64_
 }
 
 
-void
+// False when the file cannot be read as its kind by whoever reads that kind
+// (without a reader for RAW and HEIF files nobody can tell: true).
+bool
 Library::_FillMetadata(const std::string& path, MediaKind kind, Metadata& metadata)
 {
 	bool known = false;
+	bool asked = false;
 	if (kind == kKindJpeg)
 		known = ReadJpegMetadata(path, metadata);
 	if (!known) {
@@ -537,11 +540,14 @@ Library::_FillMetadata(const std::string& path, MediaKind kind, Metadata& metada
 			std::lock_guard<std::recursive_mutex> lock(fLock);
 			reader = fMetadataReader;
 		}
-		if (reader)
+		if (reader) {
+			asked = true;
 			known = reader(path, kind, metadata);
+		}
 	}
 	if (!known || metadata.width == 0)
 		ReadImageSize(path, metadata.width, metadata.height);
+	return known || !asked;
 }
 
 
@@ -590,6 +596,12 @@ Library::ImportFile(const std::string& path, const ImportOptions& options)
 		result.error = "cannot read the file";
 		return result;
 	}
+	// What the server keeps is taken as it is; anything else has to be what
+	// its name says.
+	if (options.immichId.empty() && !LooksLikePicture(path, kind)) {
+		result.error = "the file is damaged or not a picture";
+		return result;
+	}
 	std::string sha1 = Sha1OfFile(path);
 	if (sha1.empty()) {
 		result.error = "cannot read the file";
@@ -635,7 +647,13 @@ Library::ImportFile(const std::string& path, const ImportOptions& options)
 	}
 
 	Metadata metadata;
-	_FillMetadata(path, kind, metadata);
+	bool readable = _FillMetadata(path, kind, metadata);
+	if (!readable && options.immichId.empty() && !found
+		&& (kind == kKindRaw || kind == kKindHeic)) {
+		result.error = kind == kKindRaw ? "not a RAW file Photos can read"
+			: "not a HEIF picture Photos can read";
+		return result;
+	}
 	int64_t taken = metadata.taken;
 	if (taken == 0 && found)
 		taken = existing.taken;

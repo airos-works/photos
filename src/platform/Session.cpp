@@ -87,6 +87,8 @@ Session::Open(std::string* error)
 #ifdef PHOTOS_HAVE_FACEMATH
 	PeopleThresholds thresholds;
 	thresholds.same = kSameFaceThreshold;
+	thresholds.margin = kSameFaceMargin;
+	thresholds.certain = kCertainFaceThreshold;
 	thresholds.maybe = kMaybeSameFaceThreshold;
 	thresholds.minQuality = kFaceMinQuality;
 	fPeople.SetThresholds(thresholds);

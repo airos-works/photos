@@ -196,7 +196,9 @@ FaceScanner::_ScanOne(void* enginePointer, const PhotoBrief& brief)
 		return false;
 	std::vector<Face> faces;
 	for (auto& found : detected) {
-		if (found.score < kFaceMinScore || found.embedding.empty())
+		// Faces too small or blurred to recognise come without numbers:
+		// they are kept (and can be named by hand) but not compared.
+		if (found.score < kFaceMinScore)
 			continue;
 		Face face;
 		face.x = found.x;

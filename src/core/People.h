@@ -18,8 +18,10 @@ namespace photos {
 
 struct PeopleThresholds {
 	// Cosine similarity of two embeddings (FaceMath.h has the tuned values).
-	float same = 0.50f;			// surely the same person: assign
-	float maybe = 0.36f;		// possibly: suggest, group
+	float same = 0.60f;			// the same person, when nobody else comes near
+	float margin = 0.10f;		// ... nearer than this
+	float certain = 0.70f;		// the same person whoever else is near
+	float maybe = 0.45f;		// possibly: suggest
 	float minQuality = 0.30f;	// faces below are not grouped or recognised
 };
 
@@ -94,9 +96,12 @@ private:
 	void _Add(const Face& face);
 	void _Rebuild();
 	bool _Rejected(int64_t faceId, int64_t personId) const;
-	// The best person for a vector and the similarity to them.
+	// The best person for a vector and the similarity to them; nextBest is
+	// the similarity to the most similar other person.
 	int64_t _BestPerson(const Entry& entry, float& similarity,
-		int64_t onlyPerson = 0) const;
+		int64_t onlyPerson = 0, float* nextBest = nullptr) const;
+	// Whether a similarity is enough to assign a face without asking.
+	bool _Sure(float best, float nextBest) const;
 	int64_t _PlaceInCluster(Entry& entry);
 	void _SetPerson(Entry& entry, int64_t personId, int source);
 	int _RecognizeLocked(int64_t personId);

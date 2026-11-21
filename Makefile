@@ -93,6 +93,13 @@ $(BUILD)/rawtest: tools/raw-test/rawtest.cpp raw/include/photos_raw.h $(RAW_LIB)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(APP_LDFLAGS) -o $@ tools/raw-test/rawtest.cpp \
 		$(RAW_LIB) $(RAW_NATIVE_LIBS)
 
+# facescan: the face engine from a shell (tools/face-test, docs/FACES.md).
+FACESCAN_OBJ = $(BUILD)/tools/face-test/facescan.o \
+	$(BUILD)/src/platform/FaceEngine.o $(BUILD)/src/core/FaceMath.o
+$(BUILD)/facescan: $(FACESCAN_OBJ)
+	$(CXX) $(APP_LDFLAGS) -o $@ $(FACESCAN_OBJ) -lbe -ltranslation -lneural
+-include $(BUILD)/tools/face-test/facescan.d
+
 HAIKU_DIRS = src/ui src/platform src/agent src/tool
 define haiku_rule
 $(BUILD)/$(1)/%.o: $(1)/%.cpp

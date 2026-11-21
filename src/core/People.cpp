@@ -120,14 +120,27 @@ People::_Rejected(int64_t faceId, int64_t personId) const
 }
 
 
+bool
+People::_Sure(float best, float nextBest) const
+{
+	if (best >= fThresholds.certain)
+		return true;
+	return best >= fThresholds.same && best - nextBest >= fThresholds.margin;
+}
+
+
 int64_t
-People::_BestPerson(const Entry& entry, float& similarity, int64_t onlyPerson) const
+People::_BestPerson(const Entry& entry, float& similarity, int64_t onlyPerson,
+	float* nextBest) const
 {
 	const float* vector = _Vector(entry);
 	int64_t best = 0;
 	similarity = -1;
+	float second = -1;
 	for (auto& person : fByPerson) {
-		if (onlyPerson != 0 && person.first != onlyPerson)
+		// With nextBest asked for, everyone is looked at even when only one
+		// person is wanted: who else the face resembles matters.
+		if (onlyPerson != 0 && person.first != onlyPerson && nextBest == nullptr)
 			continue;
 		if (_Rejected(entry.id, person.first))
 			continue;
@@ -145,10 +158,16 @@ People::_BestPerson(const Entry& entry, float& similarity, int64_t onlyPerson) c
 			personBest = std::max(personBest, value);
 		}
 		if (personBest > similarity) {
+			second = similarity;
 			similarity = personBest;
 			best = person.first;
-		}
+		} else if (personBest > second)
+			second = personBest;
 	}
+	if (nextBest != nullptr)
+		*nextBest = second;
+	if (onlyPerson != 0 && best != onlyPerson)
+		return 0;
 	return best;
 }
 
@@ -157,8 +176,9 @@ int64_t
 People::_PlaceInCluster(Entry& entry)
 {
 	const float* vector = _Vector(entry);
-	// Close to the middle of a group: the bar is between "maybe" and "same".
-	float threshold = (fThresholds.same + fThresholds.maybe) / 2;
+	// Close to the middle of a group. The bar is "same": lower ones chain
+	// different people together (docs/FACES.md).
+	float threshold = fThresholds.same;
 	int64_t best = 0;
 	float bestValue = threshold;
 	for (auto& cluster : fClusters) {
@@ -238,9 +258,9 @@ People::Place(const std::vector<Face>& faces)
 			entry.cluster = 0;
 			if (entry.quality < fThresholds.minQuality)
 				continue;
-			float similarity;
-			int64_t person = _BestPerson(entry, similarity);
-			if (person != 0 && similarity >= fThresholds.same) {
+			float similarity, nextBest;
+			int64_t person = _BestPerson(entry, similarity, 0, &nextBest);
+			if (person != 0 && _Sure(similarity, nextBest)) {
 				entry.personId = person;
 				entry.source = kFaceAuto;
 				fByPerson[person].push_back(fEntries.size() - 1);
@@ -298,9 +318,9 @@ People::_RecognizeLocked(int64_t personId)
 				const Entry& entry = fEntries[i];
 				if (entry.personId != 0 || entry.quality < fThresholds.minQuality)
 					continue;
-				float similarity;
-				int64_t person = _BestPerson(entry, similarity, personId);
-				if (person != 0 && similarity >= fThresholds.same)
+				float similarity, nextBest;
+				int64_t person = _BestPerson(entry, similarity, personId, &nextBest);
+				if (person != 0 && _Sure(similarity, nextBest))
 					found[i] = person;
 			}
 		}, 256);

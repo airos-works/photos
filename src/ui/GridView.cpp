@@ -41,6 +41,10 @@ GridView::GridView(Session& session)
 	fAnchor(-1)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
+	// A view without a layout would ask for the size it happens to have.
+	SetExplicitMinSize(BSize(S(240), S(160)));
+	SetExplicitPreferredSize(BSize(S(700), S(500)));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 }
 
 

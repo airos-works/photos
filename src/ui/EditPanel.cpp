@@ -72,8 +72,8 @@ EditPanel::EditPanel()
 	fAspectField = new BMenuField("aspect", "Shape:", menu);
 	fAspectField->SetEnabled(false);
 
-	BButton* left = new BButton("left", "⟲ Left", new BMessage(kMsgTurnLeft));
-	BButton* right = new BButton("right", "Right ⟳", new BMessage(kMsgTurnRight));
+	BButton* left = new BButton("left", "Turn left", new BMessage(kMsgTurnLeft));
+	BButton* right = new BButton("right", "Turn right", new BMessage(kMsgTurnRight));
 	BButton* flip = new BButton("flip", "Flip", new BMessage(kMsgFlip));
 
 	fStraighten = _Slider("Straighten", -450, 450);
@@ -87,8 +87,6 @@ EditPanel::EditPanel()
 
 	fEnhance = new BButton("enhance", "Enhance", new BMessage(kMsgEditEnhance));
 	fReset = new BButton("reset", "Reset", new BMessage(kMsgEditReset));
-	fCancel = new BButton("cancel", "Cancel", new BMessage(kMsgEditCancel));
-	fDone = new BButton("done", "Done", new BMessage(kMsgEditDone));
 	fStatus = new BStringView("status", "");
 	fStatus->SetHighUIColor(B_PANEL_TEXT_COLOR, B_DISABLED_LABEL_TINT);
 
@@ -124,13 +122,8 @@ EditPanel::EditPanel()
 			.Add(fEnhance)
 			.Add(fReset)
 		.End()
-		.AddGlue()
 		.Add(fStatus)
-		.AddGroup(B_HORIZONTAL, spacing)
-			.Add(fCancel)
-			.Add(fDone)
-		.End();
-	fDone->MakeDefault(false);
+		.AddGlue();
 }
 
 
@@ -167,8 +160,6 @@ EditPanel::AttachedToWindow()
 		dynamic_cast<BButton*>(flip)->SetTarget(this);
 	fEnhance->SetTarget(Window());
 	fReset->SetTarget(Window());
-	fCancel->SetTarget(Window());
-	fDone->SetTarget(Window());
 }
 
 
@@ -210,7 +201,6 @@ void
 EditPanel::SetBusy(bool busy, const char* text)
 {
 	fStatus->SetText(text != nullptr ? text : "");
-	fDone->SetEnabled(!busy);
 	fEnhance->SetEnabled(!busy);
 	fReset->SetEnabled(!busy);
 }

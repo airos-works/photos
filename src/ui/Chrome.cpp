@@ -2,6 +2,7 @@
 
 #include "Theme.h"
 
+#include <GroupLayout.h>
 #include <Window.h>
 
 #include <algorithm>
@@ -632,6 +633,79 @@ void
 HeaderView::MouseUp(BPoint where)
 {
 	fZoomDrag = false;
+}
+
+
+// --- ScrollBox --------------------------------------------------------------
+
+class ScrollBox::Clip : public BView {
+public:
+	Clip()
+		:
+		BView("clip", B_FRAME_EVENTS)
+	{
+		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+		SetExplicitMinSize(BSize(S(100), S(80)));
+		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+	}
+
+	virtual void FrameResized(float width, float height)
+	{
+		ScrollBox* box = dynamic_cast<ScrollBox*>(Parent());
+		if (box != nullptr)
+			box->FrameResized(0, 0);
+	}
+};
+
+
+ScrollBox::ScrollBox(const char* name, BView* content, float width)
+	:
+	BView(name, B_FRAME_EVENTS),
+	fContent(content)
+{
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fClip = new Clip();
+	fBar = new BScrollBar("bar", fClip, 0, 0, B_VERTICAL);
+	BGroupLayout* layout = new BGroupLayout(B_HORIZONTAL, 0);
+	SetLayout(layout);
+	layout->AddView(fClip);
+	layout->AddView(fBar);
+	fClip->AddChild(fContent);
+	SetExplicitMinSize(BSize(width, S(120)));
+	SetExplicitMaxSize(BSize(width, B_SIZE_UNLIMITED));
+	SetExplicitPreferredSize(BSize(width, S(500)));
+}
+
+
+void
+ScrollBox::AttachedToWindow()
+{
+	BView::AttachedToWindow();
+	_Update();
+}
+
+
+void
+ScrollBox::FrameResized(float width, float height)
+{
+	_Update();
+}
+
+
+void
+ScrollBox::_Update()
+{
+	BRect clip = fClip->Bounds();
+	float minimum = fContent->MinSize().height;
+	float height = std::max(clip.Height(), minimum);
+	fContent->MoveTo(0, 0);
+	fContent->ResizeTo(clip.Width(), height);
+	float range = std::max(0.0f, height - clip.Height());
+	fBar->SetRange(0, range);
+	fBar->SetProportion(height > 0 ? std::min(1.0f, (clip.Height() + 1) / (height + 1)) : 1);
+	fBar->SetSteps(S(20), std::max(S(20), clip.Height() - S(30)));
+	if (clip.top > range)
+		fClip->ScrollTo(0, range);
 }
 
 

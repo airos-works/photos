@@ -111,9 +111,10 @@ MainWindow::MainWindow(Session& session)
 	fSideCards = new BCardLayout();
 	fSidePanel->SetLayout(fSideCards);
 	fSideCards->AddView(fInfo);
-	fSideCards->AddView(fEditPanel);
-	fSidePanel->SetExplicitMinSize(BSize(S(270), B_SIZE_UNSET));
-	fSidePanel->SetExplicitMaxSize(BSize(S(270), B_SIZE_UNSET));
+	// The editor's controls scroll when the window is not tall enough.
+	fSideCards->AddView(new ScrollBox("edit box", fEditPanel, S(286)));
+	fSidePanel->SetExplicitMinSize(BSize(S(286), S(120)));
+	fSidePanel->SetExplicitMaxSize(BSize(S(286), B_SIZE_UNLIMITED));
 	fSidePanel->Hide();
 
 	BGroupView* viewerCard = new BGroupView(B_HORIZONTAL, 0);
@@ -529,6 +530,9 @@ MainWindow::_UpdateHeader()
 		Photo photo;
 		fSession.Lib().Get(fEdit->PhotoId(), photo);
 		fHeader->SetTitle("Edit", photo.name.c_str());
+		fHeader->AddButton("Cancel", kMsgEditCancel);
+		fHeader->AddButton(fEditSaving ? "Saving…" : "Done", kMsgEditDone,
+			kButtonAccent | (fEditSaving || !fEdit->IsReady() ? kButtonDisabled : 0));
 		fHeader->Finish();
 		return;
 	}
@@ -1657,6 +1661,7 @@ MainWindow::MessageReceived(BMessage* message)
 			fEditPanel->SetBusy(false, "");
 			// From here on values render.
 			fEdit->SourceReady();
+			_UpdateHeader();
 			break;
 
 		case kMsgEditChanged:
@@ -1668,6 +1673,7 @@ MainWindow::MessageReceived(BMessage* message)
 			if (!fEdit->IsActive() || !fEdit->IsReady())
 				break;
 			bool on = message->GetBool("on", false);
+			fEditPanel->SetCropMode(on);
 			EditParams params = fEdit->Params();
 			float aspect = fEditPanel->CropAspect();
 			if (aspect < 0) {
@@ -1763,6 +1769,7 @@ MainWindow::MessageReceived(BMessage* message)
 			}
 			fEditSaving = true;
 			fEditPanel->SetBusy(true, "Saving…");
+			_UpdateHeader();
 			fEdit->Save();
 			break;
 		}
@@ -1773,6 +1780,7 @@ MainWindow::MessageReceived(BMessage* message)
 			if (!message->GetBool("ok", false)) {
 				fEditSaving = false;
 				fEditPanel->SetBusy(false, "");
+				_UpdateHeader();
 				_Alert("Edit", message->GetString("error", "The edit could not be saved."));
 				break;
 			}

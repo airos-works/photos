@@ -4,6 +4,7 @@
 
 #include "Ui.h"
 
+#include <ScrollBar.h>
 #include <View.h>
 
 #include <vector>
@@ -110,6 +111,26 @@ private:
 	BRect fZoomRect;
 	int fHover;				// index of the button under the mouse, -2: back
 	bool fZoomDrag;
+};
+
+// --- A panel that scrolls when it is taller than its place -------------------
+
+class ScrollBox : public BView {
+public:
+	// `content` is a view with a layout; it gets the box's width and at
+	// least its own minimal height.
+	ScrollBox(const char* name, BView* content, float width);
+
+	virtual void AttachedToWindow();
+	virtual void FrameResized(float width, float height);
+
+private:
+	class Clip;
+	void _Update();
+
+	BView* fContent;
+	Clip* fClip;
+	::BScrollBar* fBar;
 };
 
 // --- Status line ------------------------------------------------------------

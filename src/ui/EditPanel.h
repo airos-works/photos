@@ -46,8 +46,6 @@ private:
 	BSlider* fTint;
 	BButton* fEnhance;
 	BButton* fReset;
-	BButton* fCancel;
-	BButton* fDone;
 	BStringView* fStatus;
 	float fAspect;
 	int fRotation;

@@ -67,8 +67,10 @@ public:
 	// unassigned ones. Returns how many were assigned.
 	int Recognize(int64_t personId = 0);
 
-	// Groups of unnamed faces, largest first.
-	void ListClusters(std::vector<FaceCluster>& clusters, int minFaces = 1);
+	// Groups of unnamed faces, those seen in most photos first. minPhotos:
+	// in how many photos a group must be (a face seen in one photo only is
+	// named on that photo).
+	void ListClusters(std::vector<FaceCluster>& clusters, int minPhotos = 1);
 	// Unassigned faces that may be this person, most similar first.
 	void Suggestions(int64_t personId, std::vector<FaceSuggestion>& suggestions,
 		int limit = 60);
@@ -89,6 +91,7 @@ private:
 	struct Centroid {
 		std::vector<float> sum;
 		int count = 0;
+		std::map<int64_t, int> photos;	// photo -> faces of the group in it
 	};
 
 	const float* _Vector(const Entry& entry) const { return fVectors.data() + entry.offset; }

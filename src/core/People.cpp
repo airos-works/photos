@@ -83,6 +83,7 @@ People::_Rebuild()
 			for (int d = 0; d < fDimension; d++)
 				centroid.sum[d] += vector[d];
 			centroid.count++;
+			centroid.photos[entry.photoId]++;
 		}
 	}
 }
@@ -185,6 +186,10 @@ People::_PlaceInCluster(Entry& entry)
 		const Centroid& centroid = cluster.second;
 		if (centroid.count == 0)
 			continue;
+		// Nobody is twice in a photo: faces of one photo are different
+		// people (or the same pattern mistaken for faces several times).
+		if (centroid.photos.count(entry.photoId) != 0)
+			continue;
 		double dot = 0, length = 0;
 		for (int d = 0; d < fDimension; d++) {
 			dot += centroid.sum[d] * vector[d];
@@ -204,6 +209,7 @@ People::_PlaceInCluster(Entry& entry)
 	for (int d = 0; d < fDimension; d++)
 		centroid.sum[d] += vector[d];
 	centroid.count++;
+	centroid.photos[entry.photoId]++;
 	entry.cluster = best;
 	return best;
 }
@@ -224,6 +230,9 @@ People::_SetPerson(Entry& entry, int64_t personId, int source)
 			const float* vector = _Vector(entry);
 			for (int d = 0; d < fDimension; d++)
 				found->second.sum[d] -= vector[d];
+			auto photo = found->second.photos.find(entry.photoId);
+			if (photo != found->second.photos.end() && --photo->second <= 0)
+				found->second.photos.erase(photo);
 			if (--found->second.count <= 0)
 				fClusters.erase(found);
 		}
@@ -243,6 +252,12 @@ People::Place(const std::vector<Face>& faces)
 	std::vector<std::pair<int64_t, int64_t>> clusters;		// face -> cluster
 	{
 		std::lock_guard<std::mutex> lock(fLock);
+		// Who is in the photo already (the faces of a call are one photo's).
+		std::set<std::pair<int64_t, int64_t>> present;
+		for (auto& face : faces) {
+			if (face.personId != 0)
+				present.insert(std::make_pair(face.photoId, face.personId));
+		}
 		for (auto& face : faces) {
 			if (face.embedding.empty() || fIndex.count(face.id) != 0)
 				continue;
@@ -260,7 +275,8 @@ People::Place(const std::vector<Face>& faces)
 				continue;
 			float similarity, nextBest;
 			int64_t person = _BestPerson(entry, similarity, 0, &nextBest);
-			if (person != 0 && _Sure(similarity, nextBest)) {
+			if (person != 0 && _Sure(similarity, nextBest)
+				&& present.insert(std::make_pair(entry.photoId, person)).second) {
 				entry.personId = person;
 				entry.source = kFaceAuto;
 				fByPerson[person].push_back(fEntries.size() - 1);
@@ -269,9 +285,6 @@ People::Place(const std::vector<Face>& faces)
 				clusters.emplace_back(entry.id, _PlaceInCluster(entry));
 		}
 	}
-	// One person may not be twice in a photo: of two faces assigned to the
-	// same person the scanner's order decides; keep it simple and let both
-	// stand (twins, mirrors); the user corrects.
 	for (auto& assignment : assignments)
 		fLibrary.AssignFace(assignment.first, assignment.second, kFaceAuto);
 	fLibrary.SetFaceClusters(clusters);
@@ -324,9 +337,17 @@ People::_RecognizeLocked(int64_t personId)
 					found[i] = person;
 			}
 		}, 256);
+		// A person is in a photo once: the first face found stands.
+		std::set<std::pair<int64_t, int64_t>> present;
+		for (auto& entry : fEntries) {
+			if (entry.personId != 0)
+				present.insert(std::make_pair(entry.photoId, entry.personId));
+		}
 		int count = 0;
 		for (size_t i = 0; i < fEntries.size(); i++) {
 			if (found[i] == 0)
+				continue;
+			if (!present.insert(std::make_pair(fEntries[i].photoId, found[i])).second)
 				continue;
 			_SetPerson(fEntries[i], found[i], kFaceAuto);
 			assignments.emplace_back(fEntries[i].id, found[i]);
@@ -496,7 +517,7 @@ People::DeletePerson(int64_t personId)
 
 
 void
-People::ListClusters(std::vector<FaceCluster>& clusters, int minFaces)
+People::ListClusters(std::vector<FaceCluster>& clusters, int minPhotos)
 {
 	clusters.clear();
 	std::lock_guard<std::mutex> lock(fLock);
@@ -517,15 +538,15 @@ People::ListClusters(std::vector<FaceCluster>& clusters, int minFaces)
 		}
 	}
 	for (auto& pair : byId) {
-		if ((int)pair.second.faces.size() < minFaces)
-			continue;
 		pair.second.photoCount = (int)photos[pair.first].size();
+		if (pair.second.photoCount < minPhotos)
+			continue;
 		clusters.push_back(std::move(pair.second));
 	}
 	std::sort(clusters.begin(), clusters.end(),
 		[](const FaceCluster& a, const FaceCluster& b) {
-			if (a.faces.size() != b.faces.size())
-				return a.faces.size() > b.faces.size();
+			if (a.photoCount != b.photoCount)
+				return a.photoCount > b.photoCount;
 			return a.id < b.id;
 		});
 }

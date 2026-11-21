@@ -43,6 +43,10 @@ PeopleView::PeopleView(Session& session)
 	fHover(-1)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
+	// A view without a layout would ask for the size it happens to have.
+	SetExplicitMinSize(BSize(S(240), S(160)));
+	SetExplicitPreferredSize(BSize(S(700), S(500)));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 }
 
 
@@ -246,7 +250,7 @@ PeopleView::Draw(BRect updateRect)
 			note = CountText(fPeople[tile.index].photoCount, "photo", "photos");
 		} else {
 			name = "Add a name…";
-			note = CountText((int)fClusters[tile.index].faces.size(), "face", "faces");
+			note = CountText(fClusters[tile.index].photoCount, "photo", "photos");
 		}
 		float baseline = picture.bottom + S(5) + plain.ascent;
 		SetFont(tile.person ? be_bold_font : be_plain_font);

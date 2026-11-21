@@ -27,7 +27,7 @@ namespace {
 
 const uint32 kMsgCheckFolders = 'pcCk';
 const bigtime_t kSettleTime = 800000;
-const char* const kStateFile = ".photos-state";
+const std::string kStateKey = "edits.state.";
 
 
 bool
@@ -213,8 +213,10 @@ PhotoCraftBridge::Start()
 void
 PhotoCraftBridge::_LoadState(int64_t photoId, Folder& folder)
 {
-	std::string text;
-	if (!ReadFile(JoinPath(fLibrary.EditsDirectory(photoId), kStateFile), text, 1 << 20))
+	// Kept in the library's database, not in the folder: the folder is what
+	// the editor's file panels show.
+	std::string text = fLibrary.Setting(kStateKey + std::to_string(photoId));
+	if (text.empty())
 		return;
 	nlohmann::json parsed = nlohmann::json::parse(text, nullptr, false);
 	if (!parsed.is_object())
@@ -239,9 +241,7 @@ PhotoCraftBridge::_SaveState(int64_t photoId, const Folder& folder)
 		json[file.first] = {{"size", file.second.size},
 			{"modified", file.second.modified}, {"sha1", file.second.sha1}};
 	}
-	std::string text = json.dump();
-	WriteFile(JoinPath(fLibrary.EditsDirectory(photoId), kStateFile), text.data(),
-		text.size());
+	fLibrary.SetSetting(kStateKey + std::to_string(photoId), json.dump());
 }
 
 
@@ -437,8 +437,8 @@ PhotoCraftBridge::_AddVersion(int64_t photoId, const std::string& file,
 			"(save it with \"Maximize Compatibility\").";
 		return false;
 	}
-	std::string rendered = JoinPath(fLibrary.EditsDirectory(photoId),
-		".composite-" + RandomId() + ".jpg");
+	std::string rendered = JoinPath(fLibrary.Directory(),
+		"versions/.composite-" + RandomId() + ".jpg");
 	if (!WriteJpeg(image, 95, rendered))
 		return false;
 	version.width = image.width;

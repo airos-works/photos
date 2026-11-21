@@ -26,21 +26,21 @@ InfoView::InfoView(Session& session)
 BSize
 InfoView::MinSize()
 {
-	return BSize(S(270), S(200));
+	return BSize(S(286), S(120));
 }
 
 
 BSize
 InfoView::MaxSize()
 {
-	return BSize(S(270), B_SIZE_UNLIMITED);
+	return BSize(S(286), B_SIZE_UNLIMITED);
 }
 
 
 BSize
 InfoView::PreferredSize()
 {
-	return BSize(S(270), S(600));
+	return BSize(S(286), S(600));
 }
 
 
@@ -132,9 +132,16 @@ InfoView::_Draw(bool measure)
 
 	heading("Picture");
 	BString size;
-	if (fPhoto.width > 0) {
-		size.SetToFormat("%d × %d", fPhoto.width, fPhoto.height);
-		double megapixels = (double)fPhoto.width * fPhoto.height / 1e6;
+	int shownWidth = fPhoto.width, shownHeight = fPhoto.height;
+	for (auto& version : fVersions) {
+		if (version.id == fPhoto.version && version.width > 0) {
+			shownWidth = version.width;
+			shownHeight = version.height;
+		}
+	}
+	if (shownWidth > 0) {
+		size.SetToFormat("%d × %d", shownWidth, shownHeight);
+		double megapixels = (double)shownWidth * shownHeight / 1e6;
 		BString mp;
 		mp.SetToFormat(megapixels >= 10 ? "  ·  %.0f MP" : "  ·  %.1f MP", megapixels);
 		size << mp;

@@ -233,7 +233,7 @@ FaceScanner::_ScanOne(void* enginePointer, const PhotoBrief& brief)
 
 
 bool
-FaceScanner::ScanAllNow(std::string& error)
+FaceScanner::ScanAllNow(std::string& error, int limit)
 {
 #ifdef PHOTOS_HAVE_FACES
 	FaceEngine engine;
@@ -249,10 +249,14 @@ FaceScanner::ScanAllNow(std::string& error)
 	}
 	std::vector<PhotoBrief> photos;
 	fLibrary.List(kFilterNeedsFaces, FaceEngine::kModelVersion, photos);
+	int scanned = 0;
 	for (auto& brief : photos) {
+		if (limit > 0 && scanned >= limit)
+			break;
 		if (_ScanOne(&engine, brief)) {
 			std::lock_guard<std::mutex> lock(fLock);
 			fStatus.done++;
+			scanned++;
 		}
 	}
 	return true;

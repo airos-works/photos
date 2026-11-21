@@ -46,9 +46,9 @@ public:
 	// The engine's model version (photos scanned with another are scanned
 	// again); 0 without an engine.
 	static int ModelVersion();
-	// Scans until nothing is left (photos_tool). False if the engine is not
-	// available.
-	bool ScanAllNow(std::string& error);
+	// Scans until nothing is left, or `limit` photos (photos_tool). False if
+	// the engine is not available.
+	bool ScanAllNow(std::string& error, int limit = 0);
 
 private:
 	void _Run();

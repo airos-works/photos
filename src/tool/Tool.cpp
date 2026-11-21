@@ -34,7 +34,7 @@ Usage()
 		"  signin SERVER EMAIL PASSWORD | apikey SERVER KEY | signout\n"
 		"  sync [--no-upload]           one pass with the Immich server\n"
 		"  fetch ID                     downloads a photo's original from Immich\n"
-		"  faces [--cpu]                scans every unscanned photo\n"
+		"  faces [--cpu] [--limit N]    scans unscanned photos (all, or N)\n"
 		"  people                       people and groups of unnamed faces\n"
 		"  name CLUSTER NAME            names a group\n"
 		"  suggestions PERSON           faces that may be that person\n"
@@ -339,10 +339,17 @@ main(int argc, char** argv)
 	}
 
 	if (command == "faces") {
-		bool cpu = argc > 2 && strcmp(argv[2], "--cpu") == 0;
+		bool cpu = false;
+		int limit = 0;
+		for (int i = 2; i < argc; i++) {
+			if (strcmp(argv[i], "--cpu") == 0)
+				cpu = true;
+			else if (strcmp(argv[i], "--limit") == 0 && i + 1 < argc)
+				limit = atoi(argv[++i]);
+		}
 		bigtime_t start = system_time();
 		session.Faces().Configure(session.ModelDirectory(), cpu);
-		if (!session.Faces().ScanAllNow(error)) {
+		if (!session.Faces().ScanAllNow(error, limit)) {
 			fprintf(stderr, "%s\n", error.c_str());
 			return 1;
 		}

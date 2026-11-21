@@ -206,10 +206,12 @@ image. In particular untested on hardware:
   in the kernel (`ps` shows it; no window, no Deskbar entry). The fix
   belongs in `src/add-ons/kernel/drivers/bus/usb/usb_raw.cpp` of the air/OS
   Haiku tree: mark the device as removed before cancelling, and check the
-  mark under the device's lock before queueing a transfer.
+  mark under the device's lock before queueing a transfer
+  (airos-works/haiku#143).
 - **Names that are not ASCII**: this system's FAT driver hands such a long
   name out in a form that cannot be opened (`ls` shows `Stra?e ??.jpg`,
-  `stat` fails), so the file is not listed. QEMU's usb-mtp sends such names
+  `stat` fails), so the file is not listed (airos-works/haiku#144: the
+  kernel driver has no UTF-16 to UTF-8 conversion). QEMU's usb-mtp sends such names
   as "Oops" (it converts through the C locale); the initiator's own UTF-16
   handling is covered by the host tests. Cameras name their files in ASCII.
 - **Events are not read** (see above): a card put into a camera, or a phone

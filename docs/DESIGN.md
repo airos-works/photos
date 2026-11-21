@@ -74,7 +74,8 @@ up at its next start.
   thumbnails), WebP with libwebp, RAW and HEIF with the RAW library,
   everything else with the one translator that reads the format. The
   Translation Kit's roster is never asked to *identify* a file: that hands it
-  to every translator, and a damaged file has crashed one inside the program.
+  to every translator, and a damaged file has crashed one inside the program
+  (the RAW translator, through `BBufferIO`: airos-works/haiku#142).
 - **RAW**: thumbnails and the first view come from the camera's embedded
   preview; the development (LightCraft's default rendering) is cached as a
   JPEG in `previews/`.

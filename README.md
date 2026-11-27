@@ -14,14 +14,14 @@ back as versions.
 <!-- airos-ci:latest-builds:start -->
 ## Latest builds
 
-Built automatically by air/OS CI from commit `3b002c1` on 2026-11-21 ([all files](https://github.com/airos-works/photos/releases/tag/latest)).
+Built automatically by air/OS CI from commit `cf05de8` on 2026-11-27 ([all files](https://github.com/airos-works/photos/releases/tag/latest)).
 
 | Architecture | Package |
 |---|---|
 | arm64 | [photos-1.0.0-2-arm64.hpkg](https://github.com/airos-works/photos/releases/download/latest/photos-1.0.0-2-arm64.hpkg) |
 | x86_64 | [photos-1.0.0-2-x86_64.hpkg](https://github.com/airos-works/photos/releases/download/latest/photos-1.0.0-2-x86_64.hpkg) |
 
-Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2821-g02fa9ead2d, arm64 hrev60207-2821-g02fa9ead2d.
+Install with `pkgman install <file>`, or copy the file into `/boot/system/packages`. Haiku SDK: x86_64 hrev60207-2980-ga9b49fa1a7, arm64 hrev60207-2971-g14e061a8f0.
 <!-- airos-ci:latest-builds:end -->
 
 ## What it does
